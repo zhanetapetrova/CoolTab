@@ -122,6 +122,35 @@ function Calendar() {
     return range;
   };
 
+  const getNavigationDays = () => {
+    switch (viewType) {
+      case 'day':
+        return 1;
+      case 'week':
+        return 7;
+      case '2weeks':
+        return 7;
+      case '3weeks':
+        return 7;
+      default:
+        return 1;
+    }
+  };
+
+  const handlePreviousDate = () => {
+    const days = getNavigationDays();
+    const newDate = new Date(referenceDate);
+    newDate.setDate(newDate.getDate() - days);
+    setReferenceDate(newDate);
+  };
+
+  const handleNextDate = () => {
+    const days = getNavigationDays();
+    const newDate = new Date(referenceDate);
+    newDate.setDate(newDate.getDate() + days);
+    setReferenceDate(newDate);
+  };
+
   const isToday = (date) => {
     const today = new Date();
     return (
@@ -245,16 +274,32 @@ function Calendar() {
         </div>
         <div className="header-actions">
           {viewType !== 'year' && (
-            <div className="go-to-date-control">
-              <input 
-                type="date" 
-                value={referenceDate.toISOString().split('T')[0]}
-                onChange={(e) => {
-                  const selectedDate = new Date(e.target.value + 'T00:00:00');
-                  setReferenceDate(selectedDate);
-                }}
-                className="date-input"
-              />
+            <div className="date-navigation">
+              <button 
+                className="nav-btn prev-btn"
+                onClick={handlePreviousDate}
+                title="Previous"
+              >
+                ← Prev
+              </button>
+              <div className="go-to-date-control">
+                <input 
+                  type="date" 
+                  value={referenceDate.toISOString().split('T')[0]}
+                  onChange={(e) => {
+                    const selectedDate = new Date(e.target.value + 'T00:00:00');
+                    setReferenceDate(selectedDate);
+                  }}
+                  className="date-input"
+                />
+              </div>
+              <button 
+                className="nav-btn next-btn"
+                onClick={handleNextDate}
+                title="Next"
+              >
+                Next →
+              </button>
             </div>
           )}
           <button className="btn-create" onClick={() => setShowForm(!showForm)}>
