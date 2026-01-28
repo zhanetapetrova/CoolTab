@@ -1,11 +1,11 @@
 import React from 'react';
-import KanbanBoard from './components/KanbanBoard';
+import Calendar from './components/Calendar';
 import './App.css';
 
 function App() {
   return (
     <div className="App">
-      <KanbanBoard />
+      <Calendar />
     </div>
   );
 }

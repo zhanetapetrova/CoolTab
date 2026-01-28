@@ -55,6 +55,37 @@ function KanbanBoard() {
     return loads.filter((load) => load.status === status);
   };
 
+  // For day view: IN = arriving in warehouse on selectedDate; OUT = dispatch/loaded on selectedDate
+  const getDayInOut = (date) => {
+    if (!date) return { in: [], out: [] };
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    const inList = [];
+    const outList = [];
+
+    loads.forEach((load) => {
+      const wDate = load.warehouse?.incomingDate ? new Date(load.warehouse.incomingDate) : null;
+      const tDate = load.transport?.dispatchDate ? new Date(load.transport.dispatchDate) : null;
+      const topIn = load.incomingDate ? new Date(load.incomingDate) : null;
+      const expected = load.expectedDeliveryDate ? new Date(load.expectedDeliveryDate) : null;
+
+      const inMatch = (d) => d && d >= start && d < end;
+
+      if (inMatch(wDate) || inMatch(topIn) || inMatch(expected)) {
+        inList.push(load);
+      }
+
+      if (inMatch(tDate) || (load.status === 'loading' && inMatch(load.createdAt))) {
+        outList.push(load);
+      }
+    });
+
+    return { in: inList, out: outList };
+  };
+
   const handleCreateLoad = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -76,13 +107,27 @@ function KanbanBoard() {
           quantity: parseInt(formData.get('quantity')),
         },
       ],
+      incomingDate: formData.get('incomingDate') || undefined,
       expectedDeliveryDate: formData.get('expectedDeliveryDate'),
+      warehouse: {
+        incomingDate: formData.get('warehouseIncomingDate') || undefined,
+      },
+      transport: {
+        dispatchDate: formData.get('transportDispatchDate') || undefined,
+      },
     };
 
     try {
       await axios.post(`${API_URL}/loads`, newLoad);
       fetchLoads();
       setShowForm(false);
+      
+      // If warehouse incoming date is provided, switch to day view for that date
+      const warehouseIncomingDate = formData.get('warehouseIncomingDate');
+      if (warehouseIncomingDate) {
+        setSelectedDate(warehouseIncomingDate);
+      }
+      
       e.target.reset();
     } catch (error) {
       console.error('Error creating load:', error);
@@ -239,6 +284,15 @@ function KanbanBoard() {
               <h3>Load Details</h3>
               <input type="text" name="itemDescription" placeholder="Item Description" required />
               <input type="number" name="quantity" placeholder="Quantity" required />
+            </div>
+
+            <div className="form-section">
+              <h3>Dates</h3>
+              <label>Incoming Date (to warehouse)</label>
+              <input type="date" name="warehouseIncomingDate" />
+              <label>Date of Loading</label>
+              <input type="date" name="transportDispatchDate" />
+              <label>Expected Arrival at Client</label>
               <input type="date" name="expectedDeliveryDate" required />
             </div>
 
@@ -248,48 +302,117 @@ function KanbanBoard() {
       )}
 
       <div className="kanban-board">
-        {STATUSES.map((status) => (
-          <div key={status.key} className="kanban-column">
-            <div className="column-header">
-              <h3>{status.label}</h3>
-              <span className="count">{getLoadsByStatus(status.key).length}</span>
-            </div>
-            <div className="column-content">
-              {getLoadsByStatus(status.key).map((load) => (
-                <div
-                  key={load._id}
-                  className="load-card"
-                  onClick={() => setSelectedLoad(load)}
-                >
-                  <div className="load-card-header">
-                    <strong>ID: {load.loadId.substring(0, 8)}</strong>
-                    {load.barcode?.qrCodeData && (
-                      <div className="qr-code-mini">
-                        <img src={load.barcode.qrCodeData} alt="QR Code" title="QR Code" />
+        {selectedDate ? (
+          // Day view: two columns IN / OUT
+          (() => {
+            const { in: inList, out: outList } = getDayInOut(selectedDate);
+            return (
+              <>
+                <div className="kanban-column day-column">
+                  <div className="column-header">
+                    <h3>IN</h3>
+                    <span className="count">{inList.length}</span>
+                  </div>
+                  <div className="column-content">
+                    {inList.map((load) => (
+                      <div key={load._id} className="load-card" onClick={() => setSelectedLoad(load)}>
+                        <div className="load-card-header">
+                          <strong>ID: {load.loadId.substring(0, 8)}</strong>
+                          {load.barcode?.qrCodeData && (
+                            <div className="qr-code-mini">
+                              <img src={load.barcode.qrCodeData} alt="QR Code" title="QR Code" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="load-card-body">
+                          <p><strong>From:</strong> {load.sender?.company || 'N/A'}</p>
+                          <p><strong>To:</strong> {load.receiver?.company || 'N/A'}</p>
+                          {load.warehouse?.palletLocation && <p><strong>Location:</strong> {load.warehouse.palletLocation}</p>}
+                        </div>
+                        <div className="load-card-footer">
+                          <small>{(load.warehouse?.incomingDate || load.incomingDate || load.expectedDeliveryDate) ? new Date(load.warehouse?.incomingDate || load.incomingDate || load.expectedDeliveryDate).toLocaleString() : new Date(load.createdAt).toLocaleDateString()}</small>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                  <div className="load-card-body">
-                    <p>
-                      <strong>From:</strong> {load.sender?.company || 'N/A'}
-                    </p>
-                    <p>
-                      <strong>To:</strong> {load.receiver?.company || 'N/A'}
-                    </p>
-                    {load.warehouse?.palletLocation && (
-                      <p>
-                        <strong>Location:</strong> {load.warehouse.palletLocation}
-                      </p>
-                    )}
-                  </div>
-                  <div className="load-card-footer">
-                    <small>{new Date(load.createdAt).toLocaleDateString()}</small>
+                    ))}
                   </div>
                 </div>
-              ))}
+
+                <div className="kanban-column day-column">
+                  <div className="column-header">
+                    <h3>OUT</h3>
+                    <span className="count">{outList.length}</span>
+                  </div>
+                  <div className="column-content">
+                    {outList.map((load) => (
+                      <div key={load._id} className="load-card" onClick={() => setSelectedLoad(load)}>
+                        <div className="load-card-header">
+                          <strong>ID: {load.loadId.substring(0, 8)}</strong>
+                          {load.barcode?.qrCodeData && (
+                            <div className="qr-code-mini">
+                              <img src={load.barcode.qrCodeData} alt="QR Code" title="QR Code" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="load-card-body">
+                          <p><strong>From:</strong> {load.sender?.company || 'N/A'}</p>
+                          <p><strong>To:</strong> {load.receiver?.company || 'N/A'}</p>
+                          {load.transport?.truckId && <p><strong>Truck:</strong> {load.transport.truckId}</p>}
+                        </div>
+                        <div className="load-card-footer">
+                          <small>{(load.transport?.dispatchDate) ? new Date(load.transport.dispatchDate).toLocaleString() : new Date(load.createdAt).toLocaleDateString()}</small>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            );
+          })()
+        ) : (
+          // Full 8-column view
+          STATUSES.map((status) => (
+            <div key={status.key} className="kanban-column">
+              <div className="column-header">
+                <h3>{status.label}</h3>
+                <span className="count">{getLoadsByStatus(status.key).length}</span>
+              </div>
+              <div className="column-content">
+                {getLoadsByStatus(status.key).map((load) => (
+                  <div
+                    key={load._id}
+                    className="load-card"
+                    onClick={() => setSelectedLoad(load)}
+                  >
+                    <div className="load-card-header">
+                      <strong>ID: {load.loadId.substring(0, 8)}</strong>
+                      {load.barcode?.qrCodeData && (
+                        <div className="qr-code-mini">
+                          <img src={load.barcode.qrCodeData} alt="QR Code" title="QR Code" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="load-card-body">
+                      <p>
+                        <strong>From:</strong> {load.sender?.company || 'N/A'}
+                      </p>
+                      <p>
+                        <strong>To:</strong> {load.receiver?.company || 'N/A'}
+                      </p>
+                      {load.warehouse?.palletLocation && (
+                        <p>
+                          <strong>Location:</strong> {load.warehouse.palletLocation}
+                        </p>
+                      )}
+                    </div>
+                    <div className="load-card-footer">
+                      <small>{new Date(load.createdAt).toLocaleDateString()}</small>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {selectedLoad && (
