@@ -20,22 +20,35 @@ const SUPPORTED_FILE_TYPES = ['email', 'pdf', 'gif', 'png', 'jpg', 'jpeg', 'txt'
 
 function KanbanBoard() {
   const [loads, setLoads] = useState([]);
+  const [selectedDate, setSelectedDate] = useState('');
   const [selectedLoad, setSelectedLoad] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    fetchLoads();
-  }, []);
+    fetchLoads(selectedDate);
+  }, [selectedDate]);
 
-  const fetchLoads = async () => {
+  const fetchLoads = async (date) => {
     try {
-      const response = await axios.get(`${API_URL}/loads`);
+      let url = `${API_URL}/loads`;
+      if (date) {
+        url = `${API_URL}/loads/date/${date}`;
+      }
+      const response = await axios.get(url);
       setLoads(response.data);
     } catch (error) {
       console.error('Error fetching loads:', error);
     }
+  };
+
+  const getTodayISO = () => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   };
 
   const getLoadsByStatus = (status) => {
@@ -157,9 +170,34 @@ function KanbanBoard() {
     <div className="kanban-container">
       <div className="header">
         <h1>Load Tracking System</h1>
-        <button className="btn-create" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : '+ New Load'}
-        </button>
+        <div className="header-controls">
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            aria-label="Select date"
+          />
+          <button
+            className="btn-create"
+            onClick={() => {
+              setShowForm(!showForm);
+            }}
+          >
+            {showForm ? 'Cancel' : '+ New Load'}
+          </button>
+          <button
+            className="btn-view-day"
+            onClick={() => setSelectedDate(getTodayISO())}
+          >
+            Today
+          </button>
+          <button
+            className="btn-clear-day"
+            onClick={() => setSelectedDate('')}
+          >
+            Clear
+          </button>
+        </div>
       </div>
 
       {/* Drag and Drop Zone */}

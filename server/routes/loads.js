@@ -8,6 +8,9 @@ router.get('/', loadController.getAllLoads);
 // Get loads by status
 router.get('/status/:status', loadController.getLoadsByStatus);
 
+// Get loads for a specific date (YYYY-MM-DD)
+router.get('/date/:date', loadController.getLoadsByDate);
+
 // Get single load
 router.get('/:id', loadController.getLoad);
 

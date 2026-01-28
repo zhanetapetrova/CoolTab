@@ -84,6 +84,34 @@ exports.getLoadsByStatus = async (req, res) => {
   }
 };
 
+// Get loads for a specific date (YYYY-MM-DD)
+exports.getLoadsByDate = async (req, res) => {
+  try {
+    const { date } = req.params;
+    if (!date) return res.status(400).json({ error: 'Date required (YYYY-MM-DD)' });
+
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    const loads = await Load.find({
+      $or: [
+        { 'timeline.timestamp': { $gte: start, $lt: end } },
+        { createdAt: { $gte: start, $lt: end } },
+        { expectedDeliveryDate: { $gte: start, $lt: end } },
+        { 'warehouse.incomingDate': { $gte: start, $lt: end } },
+        { 'transport.dispatchDate': { $gte: start, $lt: end } },
+        { incomingDate: { $gte: start, $lt: end } },
+      ],
+    }).sort({ createdAt: -1 });
+
+    res.json(loads);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // Get single load
 exports.getLoad = async (req, res) => {
   try {
