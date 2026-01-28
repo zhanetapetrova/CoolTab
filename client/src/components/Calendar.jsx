@@ -65,6 +65,102 @@ function Calendar() {
     return { in: inList, out: outList };
   };
 
+  // Helper: Get date from timeline for a specific status
+  const getStatusDate = (load, status) => {
+    const event = load.timeline?.find((e) => e.status === status);
+    return event ? new Date(event.timestamp) : null;
+  };
+
+  // Helper: Normalize date to midnight
+  const normalizeDate = (date) => {
+    if (!date) return null;
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  // Helper: Check if date is on selected day
+  const isDateOnDay = (date, selectedDay) => {
+    if (!date || !selectedDay) return false;
+    const d = normalizeDate(date);
+    return d ? d.getTime() === selectedDay.getTime() : false;
+  };
+
+  // Helper: Check if selected day is between two dates (inclusive)
+  const isDateBetween = (selectedDay, startDate, endDate) => {
+    if (!startDate || !selectedDay) return false;
+    const start = normalizeDate(startDate);
+    if (!start) return false;
+
+    if (!endDate) {
+      return selectedDay.getTime() >= start.getTime();
+    }
+
+    const end = normalizeDate(endDate);
+    if (!end) return selectedDay.getTime() >= start.getTime();
+
+    return selectedDay.getTime() >= start.getTime() && selectedDay.getTime() <= end.getTime();
+  };
+
+  // Helper: Should a load display in a status column for the selected day
+  const shouldDisplayInStatus = (load, statusKey, selectedDay) => {
+    if (!load || load.status !== statusKey) return false;
+
+    switch (statusKey) {
+      case 'order_received': {
+        const orderDate = load.createdAt ? new Date(load.createdAt) : null;
+        const plannedArrival = load.plannedDates?.warehouseArrival;
+        return isDateOnDay(orderDate, selectedDay) || isDateOnDay(plannedArrival, selectedDay);
+      }
+      case 'in_transit_to_warehouse': {
+        const transitStart = getStatusDate(load, 'in_transit_to_warehouse') || load.createdAt;
+        const unloadingDate = getStatusDate(load, 'unloading');
+        return isDateBetween(selectedDay, transitStart, unloadingDate);
+      }
+      case 'unloading': {
+        const unloadingDate = getStatusDate(load, 'unloading');
+        return isDateOnDay(unloadingDate, selectedDay);
+      }
+      case 'in_warehouse': {
+        const warehouseStart = getStatusDate(load, 'in_warehouse') ||
+          getStatusDate(load, 'unloading') ||
+          load.actualDates?.warehouseArrival;
+        const transportIssuedDate = getStatusDate(load, 'transport_issued');
+        return isDateBetween(selectedDay, warehouseStart, transportIssuedDate);
+      }
+      case 'transport_issued': {
+        const issuedDate = getStatusDate(load, 'transport_issued');
+        return isDateOnDay(issuedDate, selectedDay);
+      }
+      case 'loading': {
+        const loadingDate = getStatusDate(load, 'loading') ||
+          load.transport?.dispatchDate ||
+          load.plannedDates?.warehouseDispatch;
+        return isDateOnDay(loadingDate, selectedDay);
+      }
+      case 'in_transit_to_destination': {
+        const transitStart = getStatusDate(load, 'in_transit_to_destination') ||
+          getStatusDate(load, 'loading') ||
+          load.actualDates?.warehouseDispatch;
+        const arrivedDate = getStatusDate(load, 'arrived') || load.actualDates?.clientDelivery;
+
+        if (arrivedDate) {
+          const arrivalDay = normalizeDate(arrivedDate);
+          if (arrivalDay && selectedDay.getTime() >= arrivalDay.getTime()) {
+            return false;
+          }
+        }
+        return isDateBetween(selectedDay, transitStart, arrivedDate);
+      }
+      case 'arrived': {
+        const arrivedDate = getStatusDate(load, 'arrived') || load.actualDates?.clientDelivery;
+        return arrivedDate ? isDateOnDay(arrivedDate, selectedDay) : false;
+      }
+      default:
+        return false;
+    }
+  };
+
   const getWeekNumber = (date) => {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
@@ -465,7 +561,8 @@ function Calendar() {
                   </div>
                   <div className="status-columns-container">
                     {STATUSES.map((statusObj, idx) => {
-                      const loadsInStatus = loads.filter(load => load.status === statusObj.key);
+                      const selectedDay = normalizeDate(referenceDate);
+                      const loadsInStatus = loads.filter(load => shouldDisplayInStatus(load, statusObj.key, selectedDay));
                       return (
                         <div key={idx} className="status-column">
                           <div className="status-column-header">
