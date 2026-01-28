@@ -57,6 +57,18 @@ const LoadSchema = new mongoose.Schema(
       carrier: String,
       dispatchDate: Date,
     },
+    // Planned dates (set when load is created)
+    plannedDates: {
+      warehouseArrival: Date,
+      warehouseDispatch: Date,
+      clientDelivery: Date,
+    },
+    // Actual dates (set when status changes)
+    actualDates: {
+      warehouseArrival: Date,
+      warehouseDispatch: Date,
+      clientDelivery: Date,
+    },
     timeline: [
       {
         status: String,

@@ -77,6 +77,20 @@
   background: #218838;
 }
 
+.alert-banner {
+  padding: 15px 20px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.overdue-alert {
+  background: #fff3cd;
+  border: 2px solid #ffc107;
+  color: #856404;
+}
+
 .kanban-board {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -133,6 +147,51 @@
   cursor: pointer;
   transition: all 0.2s ease;
   border-left: 4px solid #007bff;
+  position: relative;
+}
+
+.load-card.overdue {
+  border: 2px solid #dc3545;
+  border-left: 4px solid #dc3545;
+  background: #fff5f5;
+}
+
+.load-card.milestone-delayed {
+  border-left-color: #ffc107;
+}
+
+.overdue-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: #dc3545;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.delay-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: #ffc107;
+  color: #333;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.milestone-warning {
+  color: #dc3545;
+  font-weight: 600;
+  margin: 5px 0 0 0;
 }
 
 .load-card:hover {
@@ -355,6 +414,63 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* Planned vs Actual Dates Comparison */
+.dates-comparison {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  margin-top: 10px;
+}
+
+.date-row {
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.date-row:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.date-row strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #333;
+  font-size: 13px;
+}
+
+.date-comparison {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.planned-date {
+  color: #6c757d;
+  font-size: 12px;
+}
+
+.actual-date {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.actual-date.on-time {
+  color: #28a745;
+}
+
+.actual-date.delayed {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+.actual-date.pending {
+  color: #ffc107;
+  font-style: italic;
 }
 
 .load-card-header {

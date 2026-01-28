@@ -51,6 +51,76 @@ function KanbanBoard() {
     return `${yyyy}-${mm}-${dd}`;
   };
 
+  // Check if a load is overdue (not arrived by expected delivery date)
+  const isLoadOverdue = (load) => {
+    if (load.status === 'arrived') return false;
+    if (!load.expectedDeliveryDate) return false;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expectedDate = new Date(load.expectedDeliveryDate);
+    expectedDate.setHours(0, 0, 0, 0);
+    
+    return today > expectedDate;
+  };
+
+  // Count overdue loads
+  const getOverdueCount = () => {
+    return loads.filter(load => isLoadOverdue(load)).length;
+  };
+
+  // Check if any milestone is delayed (actual date past planned date)
+  const hasDelayedMilestone = (load) => {
+    if (!load.plannedDates || !load.actualDates) return false;
+    
+    const checkDelay = (planned, actual) => {
+      if (!planned || !actual) return false;
+      return new Date(actual) > new Date(planned);
+    };
+    
+    return checkDelay(load.plannedDates.warehouseArrival, load.actualDates.warehouseArrival) ||
+           checkDelay(load.plannedDates.warehouseDispatch, load.actualDates.warehouseDispatch) ||
+           checkDelay(load.plannedDates.clientDelivery, load.actualDates.clientDelivery);
+  };
+
+  // Check if a specific milestone is approaching but not completed
+  const isApproachingDeadline = (load, milestone) => {
+    if (!load.plannedDates) return false;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    let plannedDate;
+    let isCompleted = false;
+    
+    switch(milestone) {
+      case 'warehouseArrival':
+        plannedDate = load.plannedDates.warehouseArrival;
+        isCompleted = load.actualDates?.warehouseArrival || load.status === 'in_warehouse' || 
+                      ['transport_issued', 'loading', 'in_transit_to_destination', 'arrived'].includes(load.status);
+        break;
+      case 'warehouseDispatch':
+        plannedDate = load.plannedDates.warehouseDispatch;
+        isCompleted = load.actualDates?.warehouseDispatch || 
+                      ['loading', 'in_transit_to_destination', 'arrived'].includes(load.status);
+        break;
+      case 'clientDelivery':
+        plannedDate = load.plannedDates.clientDelivery;
+        isCompleted = load.actualDates?.clientDelivery || load.status === 'arrived';
+        break;
+      default:
+        return false;
+    }
+    
+    if (!plannedDate || isCompleted) return false;
+    
+    const planned = new Date(plannedDate);
+    planned.setHours(0, 0, 0, 0);
+    
+    // Approaching if past the planned date
+    return today > planned;
+  };
+
   const getLoadsByStatus = (status) => {
     return loads.filter((load) => load.status === status);
   };
@@ -70,8 +140,11 @@ function KanbanBoard() {
       // If load has arrived, only show it on or before its arrival date
       if (load.status === 'arrived') {
         const arrivedEvent = load.timeline?.find((event) => event.status === 'arrived');
-        if (arrivedEvent) {
-          const arrivalDate = new Date(arrivedEvent.timestamp);
+        const arrivalDate = arrivedEvent 
+          ? new Date(arrivedEvent.timestamp)
+          : (load.expectedDeliveryDate ? new Date(load.expectedDeliveryDate) : null);
+        
+        if (arrivalDate) {
           arrivalDate.setHours(0, 0, 0, 0);
           // Only include if the selected date is on or before the arrival date
           if (start > arrivalDate) {
@@ -258,6 +331,13 @@ function KanbanBoard() {
         </div>
       </div>
 
+      {/* Overdue Alert */}
+      {getOverdueCount() > 0 && (
+        <div className="alert-banner overdue-alert">
+          <strong>⚠️ Alert:</strong> {getOverdueCount()} load{getOverdueCount() > 1 ? 's' : ''} past expected delivery date and not yet arrived!
+        </div>
+      )}
+
       {/* Drag and Drop Zone */}
       <div
         className={`drag-drop-zone ${dragActive ? 'active' : ''} ${uploading ? 'uploading' : ''}`}
@@ -328,7 +408,9 @@ function KanbanBoard() {
                   </div>
                   <div className="column-content">
                     {inList.map((load) => (
-                      <div key={load._id} className="load-card" onClick={() => setSelectedLoad(load)}>
+                      <div key={load._id} className={`load-card ${isLoadOverdue(load) ? 'overdue' : ''} ${hasDelayedMilestone(load) ? 'milestone-delayed' : ''}`} onClick={() => setSelectedLoad(load)}>
+                        {isLoadOverdue(load) && <div className="overdue-badge">OVERDUE</div>}
+                        {hasDelayedMilestone(load) && !isLoadOverdue(load) && <div className="delay-badge">DELAYED</div>}
                         <div className="load-card-header">
                           <strong>ID: {load.loadId.substring(0, 8)}</strong>
                           {load.barcode?.qrCodeData && (
@@ -341,6 +423,13 @@ function KanbanBoard() {
                           <p><strong>From:</strong> {load.sender?.company || 'N/A'}</p>
                           <p><strong>To:</strong> {load.receiver?.company || 'N/A'}</p>
                           {load.warehouse?.palletLocation && <p><strong>Location:</strong> {load.warehouse.palletLocation}</p>}
+                          {/* Show milestone warnings */}
+                          {isApproachingDeadline(load, 'warehouseArrival') && (
+                            <p className="milestone-warning"><small>⚠️ Warehouse arrival overdue</small></p>
+                          )}
+                          {isApproachingDeadline(load, 'clientDelivery') && (
+                            <p className="milestone-warning"><small>⚠️ Delivery overdue</small></p>
+                          )}
                         </div>
                         <div className="load-card-footer">
                           <small>{(load.warehouse?.incomingDate || load.incomingDate || load.expectedDeliveryDate) ? new Date(load.warehouse?.incomingDate || load.incomingDate || load.expectedDeliveryDate).toLocaleString() : new Date(load.createdAt).toLocaleDateString()}</small>
@@ -357,7 +446,9 @@ function KanbanBoard() {
                   </div>
                   <div className="column-content">
                     {outList.map((load) => (
-                      <div key={load._id} className="load-card" onClick={() => setSelectedLoad(load)}>
+                      <div key={load._id} className={`load-card ${isLoadOverdue(load) ? 'overdue' : ''} ${hasDelayedMilestone(load) ? 'milestone-delayed' : ''}`} onClick={() => setSelectedLoad(load)}>
+                        {isLoadOverdue(load) && <div className="overdue-badge">OVERDUE</div>}
+                        {hasDelayedMilestone(load) && !isLoadOverdue(load) && <div className="delay-badge">DELAYED</div>}
                         <div className="load-card-header">
                           <strong>ID: {load.loadId.substring(0, 8)}</strong>
                           {load.barcode?.qrCodeData && (
@@ -370,6 +461,13 @@ function KanbanBoard() {
                           <p><strong>From:</strong> {load.sender?.company || 'N/A'}</p>
                           <p><strong>To:</strong> {load.receiver?.company || 'N/A'}</p>
                           {load.transport?.truckId && <p><strong>Truck:</strong> {load.transport.truckId}</p>}
+                          {/* Show milestone warnings */}
+                          {isApproachingDeadline(load, 'warehouseDispatch') && (
+                            <p className="milestone-warning"><small>⚠️ Dispatch overdue</small></p>
+                          )}
+                          {isApproachingDeadline(load, 'clientDelivery') && (
+                            <p className="milestone-warning"><small>⚠️ Delivery overdue</small></p>
+                          )}
                         </div>
                         <div className="load-card-footer">
                           <small>{(load.transport?.dispatchDate) ? new Date(load.transport.dispatchDate).toLocaleString() : new Date(load.createdAt).toLocaleDateString()}</small>
@@ -393,9 +491,11 @@ function KanbanBoard() {
                 {getLoadsByStatus(status.key).map((load) => (
                   <div
                     key={load._id}
-                    className="load-card"
+                    className={`load-card ${isLoadOverdue(load) ? 'overdue' : ''} ${hasDelayedMilestone(load) ? 'milestone-delayed' : ''}`}
                     onClick={() => setSelectedLoad(load)}
                   >
+                    {isLoadOverdue(load) && <div className="overdue-badge">OVERDUE</div>}
+                    {hasDelayedMilestone(load) && !isLoadOverdue(load) && <div className="delay-badge">DELAYED</div>}
                     <div className="load-card-header">
                       <strong>ID: {load.loadId.substring(0, 8)}</strong>
                       {load.barcode?.qrCodeData && (
@@ -415,6 +515,16 @@ function KanbanBoard() {
                         <p>
                           <strong>Location:</strong> {load.warehouse.palletLocation}
                         </p>
+                      )}
+                      {/* Show specific milestone warnings based on status */}
+                      {status.key === 'in_transit_to_warehouse' && isApproachingDeadline(load, 'warehouseArrival') && (
+                        <p className="milestone-warning"><small>⚠️ Warehouse arrival overdue</small></p>
+                      )}
+                      {['in_warehouse', 'transport_issued'].includes(status.key) && isApproachingDeadline(load, 'warehouseDispatch') && (
+                        <p className="milestone-warning"><small>⚠️ Dispatch overdue</small></p>
+                      )}
+                      {['loading', 'in_transit_to_destination'].includes(status.key) && isApproachingDeadline(load, 'clientDelivery') && (
+                        <p className="milestone-warning"><small>⚠️ Delivery overdue</small></p>
                       )}
                     </div>
                     <div className="load-card-footer">
@@ -479,6 +589,74 @@ function KanbanBoard() {
                     <strong>Pallet Location:</strong>{' '}
                     {selectedLoad.warehouse.palletLocation}
                   </p>
+                </div>
+              )}
+
+              {/* Planned vs Actual Dates Comparison */}
+              {(selectedLoad.plannedDates || selectedLoad.actualDates) && (
+                <div className="detail-section">
+                  <h3>Planned vs Actual Dates</h3>
+                  <div className="dates-comparison">
+                    {/* Warehouse Arrival */}
+                    {selectedLoad.plannedDates?.warehouseArrival && (
+                      <div className="date-row">
+                        <strong>Warehouse Arrival:</strong>
+                        <div className="date-comparison">
+                          <span className="planned-date">
+                            Planned: {new Date(selectedLoad.plannedDates.warehouseArrival).toLocaleDateString()}
+                          </span>
+                          {selectedLoad.actualDates?.warehouseArrival ? (
+                            <span className={`actual-date ${new Date(selectedLoad.actualDates.warehouseArrival) > new Date(selectedLoad.plannedDates.warehouseArrival) ? 'delayed' : 'on-time'}`}>
+                              Actual: {new Date(selectedLoad.actualDates.warehouseArrival).toLocaleDateString()}
+                              {new Date(selectedLoad.actualDates.warehouseArrival) > new Date(selectedLoad.plannedDates.warehouseArrival) && ' ⚠️ DELAYED'}
+                            </span>
+                          ) : (
+                            <span className="actual-date pending">Actual: Pending</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Warehouse Dispatch */}
+                    {selectedLoad.plannedDates?.warehouseDispatch && (
+                      <div className="date-row">
+                        <strong>Warehouse Dispatch:</strong>
+                        <div className="date-comparison">
+                          <span className="planned-date">
+                            Planned: {new Date(selectedLoad.plannedDates.warehouseDispatch).toLocaleDateString()}
+                          </span>
+                          {selectedLoad.actualDates?.warehouseDispatch ? (
+                            <span className={`actual-date ${new Date(selectedLoad.actualDates.warehouseDispatch) > new Date(selectedLoad.plannedDates.warehouseDispatch) ? 'delayed' : 'on-time'}`}>
+                              Actual: {new Date(selectedLoad.actualDates.warehouseDispatch).toLocaleDateString()}
+                              {new Date(selectedLoad.actualDates.warehouseDispatch) > new Date(selectedLoad.plannedDates.warehouseDispatch) && ' ⚠️ DELAYED'}
+                            </span>
+                          ) : (
+                            <span className="actual-date pending">Actual: Pending</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Client Delivery */}
+                    {selectedLoad.plannedDates?.clientDelivery && (
+                      <div className="date-row">
+                        <strong>Client Delivery:</strong>
+                        <div className="date-comparison">
+                          <span className="planned-date">
+                            Planned: {new Date(selectedLoad.plannedDates.clientDelivery).toLocaleDateString()}
+                          </span>
+                          {selectedLoad.actualDates?.clientDelivery ? (
+                            <span className={`actual-date ${new Date(selectedLoad.actualDates.clientDelivery) > new Date(selectedLoad.plannedDates.clientDelivery) ? 'delayed' : 'on-time'}`}>
+                              Actual: {new Date(selectedLoad.actualDates.clientDelivery).toLocaleDateString()}
+                              {new Date(selectedLoad.actualDates.clientDelivery) > new Date(selectedLoad.plannedDates.clientDelivery) && ' ⚠️ DELAYED'}
+                            </span>
+                          ) : (
+                            <span className="actual-date pending">Actual: Pending</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

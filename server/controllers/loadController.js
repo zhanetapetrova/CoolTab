@@ -151,6 +151,13 @@ exports.createLoad = async (req, res) => {
   try {
     const { sender, receiver, items, expectedDeliveryDate, fileInfo, warehouse, transport, incomingDate } = req.body;
     
+    // Create plannedDates object from input dates
+    const plannedDates = {
+      warehouseArrival: warehouse?.incomingDate || incomingDate,
+      warehouseDispatch: transport?.dispatchDate,
+      clientDelivery: expectedDeliveryDate,
+    };
+    
     let load;
     if (req.useMockDb) {
       load = await mockDb.createLoad({
@@ -161,6 +168,7 @@ exports.createLoad = async (req, res) => {
         warehouse,
         transport,
         incomingDate,
+        plannedDates,
         status: 'order_received',
       });
     } else {
@@ -172,6 +180,7 @@ exports.createLoad = async (req, res) => {
         warehouse,
         transport,
         incomingDate,
+        plannedDates,
         status: 'order_received',
       });
       await load.save();
@@ -258,6 +267,19 @@ exports.updateLoadStatus = async (req, res) => {
     const { id } = req.params;
     const { status, notes, location } = req.body;
 
+    const now = new Date();
+    const updateFields = { status };
+    
+    // Record actual dates based on status change
+    if (status === 'in_warehouse') {
+      updateFields['actualDates.warehouseArrival'] = now;
+    } else if (status === 'loading' || status === 'in_transit_to_destination') {
+      updateFields['actualDates.warehouseDispatch'] = now;
+    } else if (status === 'arrived') {
+      updateFields['actualDates.clientDelivery'] = now;
+      updateFields.actualDeliveryDate = now;
+    }
+
     let load;
     if (req.useMockDb) {
       load = await mockDb.updateLoadStatus(id, status, notes, location);
@@ -265,11 +287,11 @@ exports.updateLoadStatus = async (req, res) => {
       load = await Load.findByIdAndUpdate(
         id,
         {
-          status,
+          ...updateFields,
           $push: {
             timeline: {
               status,
-              timestamp: new Date(),
+              timestamp: now,
               notes,
               location,
             },
