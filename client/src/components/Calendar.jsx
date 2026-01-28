@@ -7,9 +7,8 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 function Calendar() {
   const [loads, setLoads] = useState([]);
   const [selectedLoad, setSelectedLoad] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [year, setYear] = useState(new Date().getFullYear());
 
   const STATUSES = [
     { key: 'order_received', label: 'Order Received' },
@@ -64,41 +63,28 @@ function Calendar() {
     return { in: inList, out: outList };
   };
 
-  const getDaysInMonth = (date) => {
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  const getWeekNumber = (date) => {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    const diff = d - yearStart;
+    const oneWeek = 1000 * 60 * 60 * 24 * 7;
+    return Math.floor(diff / oneWeek) + 1;
   };
 
-  const getFirstDayOfMonth = (date) => {
-    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  const getDaysInYear = (y) => {
+    return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 366 : 365;
   };
 
-  const formatDate = (day) => {
-    const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  };
-
-  const isToday = (day) => {
+  const isToday = (date) => {
     const today = new Date();
     return (
-      day === today.getDate() &&
-      currentMonth.getMonth() === today.getMonth() &&
-      currentMonth.getFullYear() === today.getFullYear()
+      date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear()
     );
   };
-
-  const daysInMonth = getDaysInMonth(currentMonth);
-  const firstDay = getFirstDayOfMonth(currentMonth);
-  const days = [];
-
-  for (let i = 0; i < firstDay; i++) {
-    days.push(null);
-  }
-  for (let i = 1; i <= daysInMonth; i++) {
-    days.push(i);
-  }
 
   const handleCreateLoad = async (e) => {
     e.preventDefault();
@@ -154,13 +140,42 @@ function Calendar() {
     }
   };
 
+  // Generate all days of the year
+  const daysOfYear = [];
+  const daysInYear = getDaysInYear(year);
+  for (let i = 0; i < daysInYear; i++) {
+    daysOfYear.push(new Date(year, 0, i + 1));
+  }
+
+  // Group days by week
+  const daysByWeek = [];
+  let currentWeek = [];
+  let currentWeekNum = null;
+
+  daysOfYear.forEach((date) => {
+    const weekNum = getWeekNumber(date);
+    if (currentWeekNum !== null && currentWeekNum !== weekNum) {
+      daysByWeek.push(currentWeek);
+      currentWeek = [];
+    }
+    currentWeek.push(date);
+    currentWeekNum = weekNum;
+  });
+  if (currentWeek.length > 0) {
+    daysByWeek.push(currentWeek);
+  }
+
   return (
-    <div className="calendar-container">
+    <div className="timeline-calendar-container">
       <div className="header">
-        <h1>Load Tracking Calendar</h1>
-        <button className="btn-create" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : '+ New Load'}
-        </button>
+        <h1>Load Tracking Timeline - {year}</h1>
+        <div className="year-controls">
+          <button onClick={() => setYear(year - 1)}>← Prev Year</button>
+          <button className="btn-create" onClick={() => setShowForm(!showForm)}>
+            {showForm ? 'Cancel' : '+ New Load'}
+          </button>
+          <button onClick={() => setYear(year + 1)}>Next Year →</button>
+        </div>
       </div>
 
       {showForm && (
@@ -201,84 +216,71 @@ function Calendar() {
         </div>
       )}
 
-      <div className="calendar-header">
-        <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}>
-          ← Prev
-        </button>
-        <h2>{currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h2>
-        <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))}>
-          Next →
-        </button>
-      </div>
-
-      <div className="calendar-grid">
-        {days.map((day, idx) => {
-          if (!day) {
-            return <div key={`empty-${idx}`} className="calendar-day empty"></div>;
-          }
-
-          const dateStr = formatDate(day);
-          const { in: inLoads, out: outLoads } = getLoadsByDateAndType(new Date(dateStr));
-          const dayIsToday = isToday(day);
-
-          return (
-            <div
-              key={day}
-              className={`calendar-day ${dayIsToday ? 'today' : ''} ${selectedDate === dateStr ? 'selected' : ''}`}
-              onClick={() => setSelectedDate(dateStr)}
-            >
-              <div className="day-header">
-                <span className="day-number">{day}</span>
+      <div className="timeline-wrapper">
+        <div className="timeline-label">ТОВАРИ</div>
+        <div className="timeline-scroll">
+          {daysByWeek.map((week, weekIdx) => (
+            <div key={weekIdx} className="timeline-week">
+              <div className="week-header">
+                <span className="week-number">CW{getWeekNumber(week[0])}</span>
               </div>
+              <div className="week-days">
+                {week.map((date, dayIdx) => {
+                  const { in: inLoads, out: outLoads } = getLoadsByDateAndType(date);
+                  const today = isToday(date);
 
-              <div className="day-content">
-                <div className="day-column in-column">
-                  <div className="column-label">IN</div>
-                  <div className="load-list">
-                    {inLoads.slice(0, 2).map((load) => (
-                      <div
-                        key={load._id}
-                        className="load-mini-card"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedLoad(load);
-                        }}
-                      >
-                        <small>{load.loadId.substring(0, 6)}</small>
+                  return (
+                    <div
+                      key={dayIdx}
+                      className={`timeline-day ${today ? 'today' : ''}`}
+                      title={date.toLocaleDateString()}
+                    >
+                      <div className="day-number">{date.getDate()}</div>
+                      <div className="day-columns">
+                        <div className="day-column in-column">
+                          {inLoads.length > 0 && (
+                            <>
+                              <div className="column-dot" title={`${inLoads.length} incoming`}>●</div>
+                              {inLoads.slice(0, 1).map((load) => (
+                                <div
+                                  key={load._id}
+                                  className="load-dot"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedLoad(load);
+                                  }}
+                                  title={load.loadId.substring(0, 8)}
+                                >◆</div>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                        <div className="day-column out-column">
+                          {outLoads.length > 0 && (
+                            <>
+                              <div className="column-dot" title={`${outLoads.length} outgoing`}>●</div>
+                              {outLoads.slice(0, 1).map((load) => (
+                                <div
+                                  key={load._id}
+                                  className="load-dot"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedLoad(load);
+                                  }}
+                                  title={load.loadId.substring(0, 8)}
+                                >◆</div>
+                              ))}
+                            </>
+                          )}
+                        </div>
                       </div>
-                    ))}
-                    {inLoads.length > 2 && (
-                      <small className="load-count">+{inLoads.length - 2} more</small>
-                    )}
-                  </div>
-                  <span className="count">{inLoads.length}</span>
-                </div>
-
-                <div className="day-column out-column">
-                  <div className="column-label">OUT</div>
-                  <div className="load-list">
-                    {outLoads.slice(0, 2).map((load) => (
-                      <div
-                        key={load._id}
-                        className="load-mini-card"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedLoad(load);
-                        }}
-                      >
-                        <small>{load.loadId.substring(0, 6)}</small>
-                      </div>
-                    ))}
-                    {outLoads.length > 2 && (
-                      <small className="load-count">+{outLoads.length - 2} more</small>
-                    )}
-                  </div>
-                  <span className="count">{outLoads.length}</span>
-                </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
 
       {selectedLoad && (
