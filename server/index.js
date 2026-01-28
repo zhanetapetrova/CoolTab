@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const mockDb = require('./mockDb');
 require('dotenv').config();
 
 const app = express();
@@ -11,13 +12,31 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // MongoDB Connection
+let dbConnected = false;
 mongoose
   .connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/cooltab', {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
-  .then(() => console.log('MongoDB connected'))
-  .catch((err) => console.log('MongoDB connection error:', err));
+  .then(() => {
+    console.log('✓ MongoDB connected');
+    dbConnected = true;
+  })
+  .catch((err) => {
+    console.log('⚠ MongoDB connection error - using mock database for development');
+    console.log('Error:', err.message);
+  });
+
+// Enable mock database flag for controllers
+app.use((req, res, next) => {
+  req.useMockDb = !dbConnected;
+  next();
+});
+
+// Seed mock database with sample data if using mock DB
+if (!dbConnected) {
+  mockDb.seedSampleData().catch(console.error);
+}
 
 // Routes
 const loadRoutes = require('./routes/loads');

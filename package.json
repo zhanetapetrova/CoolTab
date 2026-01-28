@@ -11,10 +11,16 @@
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down"
   },
-  "keywords": ["load", "tracking", "warehouse", "logistics"],
+  "keywords": [
+    "load",
+    "tracking",
+    "warehouse",
+    "logistics"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "concurrently": "^8.2.0"
+    "concurrently": "^8.2.0",
+    "mongodb-memory-server": "^11.0.1"
   }
 }

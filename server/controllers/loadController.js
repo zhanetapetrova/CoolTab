@@ -3,6 +3,7 @@ const QRCode = require('qrcode');
 const { simpleParser } = require('mailparser');
 const fs = require('fs');
 const path = require('path');
+const mockDb = require('../mockDb');
 
 // Generate QR Code for load
 const generateQRCode = async (loadId) => {
@@ -66,7 +67,12 @@ const extractFileInfo = async (fileBuffer, filename) => {
 // Get all loads
 exports.getAllLoads = async (req, res) => {
   try {
-    const loads = await Load.find().sort({ createdAt: -1 });
+    let loads;
+    if (req.useMockDb) {
+      loads = await mockDb.getAllLoads();
+    } else {
+      loads = await Load.find().sort({ createdAt: -1 });
+    }
     res.json(loads);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -77,7 +83,12 @@ exports.getAllLoads = async (req, res) => {
 exports.getLoadsByStatus = async (req, res) => {
   try {
     const { status } = req.params;
-    const loads = await Load.find({ status }).sort({ createdAt: -1 });
+    let loads;
+    if (req.useMockDb) {
+      loads = await mockDb.getLoadsByStatus(status);
+    } else {
+      loads = await Load.find({ status }).sort({ createdAt: -1 });
+    }
     res.json(loads);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -90,21 +101,26 @@ exports.getLoadsByDate = async (req, res) => {
     const { date } = req.params;
     if (!date) return res.status(400).json({ error: 'Date required (YYYY-MM-DD)' });
 
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
+    let loads;
+    if (req.useMockDb) {
+      loads = await mockDb.getLoadsByDate(date);
+    } else {
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
 
-    const loads = await Load.find({
-      $or: [
-        { 'timeline.timestamp': { $gte: start, $lt: end } },
-        { createdAt: { $gte: start, $lt: end } },
-        { expectedDeliveryDate: { $gte: start, $lt: end } },
-        { 'warehouse.incomingDate': { $gte: start, $lt: end } },
-        { 'transport.dispatchDate': { $gte: start, $lt: end } },
-        { incomingDate: { $gte: start, $lt: end } },
-      ],
-    }).sort({ createdAt: -1 });
+      loads = await Load.find({
+        $or: [
+          { 'timeline.timestamp': { $gte: start, $lt: end } },
+          { createdAt: { $gte: start, $lt: end } },
+          { expectedDeliveryDate: { $gte: start, $lt: end } },
+          { 'warehouse.incomingDate': { $gte: start, $lt: end } },
+          { 'transport.dispatchDate': { $gte: start, $lt: end } },
+          { incomingDate: { $gte: start, $lt: end } },
+        ],
+      }).sort({ createdAt: -1 });
+    }
 
     res.json(loads);
   } catch (error) {
@@ -115,7 +131,13 @@ exports.getLoadsByDate = async (req, res) => {
 // Get single load
 exports.getLoad = async (req, res) => {
   try {
-    const load = await Load.findById(req.params.id);
+    const { id } = req.params;
+    let load;
+    if (req.useMockDb) {
+      load = await mockDb.getLoadById(id);
+    } else {
+      load = await Load.findById(id);
+    }
     if (!load) return res.status(404).json({ error: 'Load not found' });
     res.json(load);
   } catch (error) {
@@ -126,27 +148,45 @@ exports.getLoad = async (req, res) => {
 // Create new load
 exports.createLoad = async (req, res) => {
   try {
-    const { sender, receiver, items, expectedDeliveryDate, fileInfo } = req.body;
+    const { sender, receiver, items, expectedDeliveryDate, fileInfo, warehouse, transport, incomingDate } = req.body;
     
-    const load = new Load({
-      sender,
-      receiver,
-      items,
-      expectedDeliveryDate,
-      status: 'order_received',
-    });
-
-    await load.save();
+    let load;
+    if (req.useMockDb) {
+      load = await mockDb.createLoad({
+        sender,
+        receiver,
+        items,
+        expectedDeliveryDate,
+        warehouse,
+        transport,
+        incomingDate,
+        status: 'order_received',
+      });
+    } else {
+      load = new Load({
+        sender,
+        receiver,
+        items,
+        expectedDeliveryDate,
+        warehouse,
+        transport,
+        incomingDate,
+        status: 'order_received',
+      });
+      await load.save();
+    }
 
     // Generate QR code for the load ID
-    const qrCodeData = await generateQRCode(load.loadId);
+    const qrCodeData = await generateQRCode(load.loadId || load._id);
     if (qrCodeData) {
       load.barcode = {
         qrCodeData,
-        barcodeId: load.loadId,
+        barcodeId: load.loadId || load._id,
         generatedAt: new Date(),
       };
-      await load.save();
+      if (!req.useMockDb) {
+        await load.save();
+      }
     }
 
     res.status(201).json(load);
@@ -217,21 +257,26 @@ exports.updateLoadStatus = async (req, res) => {
     const { id } = req.params;
     const { status, notes, location } = req.body;
 
-    const load = await Load.findByIdAndUpdate(
-      id,
-      {
-        status,
-        $push: {
-          timeline: {
-            status,
-            timestamp: new Date(),
-            notes,
-            location,
+    let load;
+    if (req.useMockDb) {
+      load = await mockDb.updateLoadStatus(id, status, notes, location);
+    } else {
+      load = await Load.findByIdAndUpdate(
+        id,
+        {
+          status,
+          $push: {
+            timeline: {
+              status,
+              timestamp: new Date(),
+              notes,
+              location,
+            },
           },
         },
-      },
-      { new: true }
-    );
+        { new: true }
+      );
+    }
 
     if (!load) return res.status(404).json({ error: 'Load not found' });
     res.json(load);
