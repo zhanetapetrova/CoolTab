@@ -1,0 +1,246 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import './KanbanBoard.css';
+
+const STATUSES = [
+  { key: 'order_received', label: 'Order Received' },
+  { key: 'in_transit_to_warehouse', label: 'In Transit to Warehouse' },
+  { key: 'unloading', label: 'Unloading' },
+  { key: 'in_warehouse', label: 'In Warehouse' },
+  { key: 'transport_issued', label: 'Transport Issued' },
+  { key: 'loading', label: 'Loading' },
+  { key: 'in_transit_to_destination', label: 'In Transit to Destination' },
+  { key: 'arrived', label: 'Arrived' },
+];
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+function KanbanBoard() {
+  const [loads, setLoads] = useState([]);
+  const [selectedLoad, setSelectedLoad] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    fetchLoads();
+  }, []);
+
+  const fetchLoads = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/loads`);
+      setLoads(response.data);
+    } catch (error) {
+      console.error('Error fetching loads:', error);
+    }
+  };
+
+  const getLoadsByStatus = (status) => {
+    return loads.filter((load) => load.status === status);
+  };
+
+  const handleCreateLoad = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+
+    const newLoad = {
+      sender: {
+        company: formData.get('senderCompany'),
+        address: formData.get('senderAddress'),
+        contact: formData.get('senderContact'),
+      },
+      receiver: {
+        company: formData.get('receiverCompany'),
+        address: formData.get('receiverAddress'),
+        contact: formData.get('receiverContact'),
+      },
+      items: [
+        {
+          description: formData.get('itemDescription'),
+          quantity: parseInt(formData.get('quantity')),
+        },
+      ],
+      expectedDeliveryDate: formData.get('expectedDeliveryDate'),
+    };
+
+    try {
+      await axios.post(`${API_URL}/loads`, newLoad);
+      fetchLoads();
+      setShowForm(false);
+      e.target.reset();
+    } catch (error) {
+      console.error('Error creating load:', error);
+    }
+  };
+
+  const handleUpdateStatus = async (loadId, newStatus) => {
+    try {
+      await axios.patch(`${API_URL}/loads/${loadId}/status`, {
+        status: newStatus,
+        notes: `Moved to ${newStatus}`,
+      });
+      fetchLoads();
+      setSelectedLoad(null);
+    } catch (error) {
+      console.error('Error updating load:', error);
+    }
+  };
+
+  return (
+    <div className="kanban-container">
+      <div className="header">
+        <h1>Load Tracking System</h1>
+        <button className="btn-create" onClick={() => setShowForm(!showForm)}>
+          {showForm ? 'Cancel' : '+ New Load'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="form-container">
+          <form onSubmit={handleCreateLoad}>
+            <div className="form-section">
+              <h3>Sender Information</h3>
+              <input type="text" name="senderCompany" placeholder="Company" required />
+              <input type="text" name="senderAddress" placeholder="Address" required />
+              <input type="text" name="senderContact" placeholder="Contact" required />
+            </div>
+
+            <div className="form-section">
+              <h3>Receiver Information</h3>
+              <input type="text" name="receiverCompany" placeholder="Company" required />
+              <input type="text" name="receiverAddress" placeholder="Address" required />
+              <input type="text" name="receiverContact" placeholder="Contact" required />
+            </div>
+
+            <div className="form-section">
+              <h3>Load Details</h3>
+              <input type="text" name="itemDescription" placeholder="Item Description" required />
+              <input type="number" name="quantity" placeholder="Quantity" required />
+              <input type="date" name="expectedDeliveryDate" required />
+            </div>
+
+            <button type="submit" className="btn-submit">Create Load</button>
+          </form>
+        </div>
+      )}
+
+      <div className="kanban-board">
+        {STATUSES.map((status) => (
+          <div key={status.key} className="kanban-column">
+            <div className="column-header">
+              <h3>{status.label}</h3>
+              <span className="count">{getLoadsByStatus(status.key).length}</span>
+            </div>
+            <div className="column-content">
+              {getLoadsByStatus(status.key).map((load) => (
+                <div
+                  key={load._id}
+                  className="load-card"
+                  onClick={() => setSelectedLoad(load)}
+                >
+                  <div className="load-card-header">
+                    <strong>ID: {load.loadId.substring(0, 8)}</strong>
+                  </div>
+                  <div className="load-card-body">
+                    <p>
+                      <strong>From:</strong> {load.sender?.company || 'N/A'}
+                    </p>
+                    <p>
+                      <strong>To:</strong> {load.receiver?.company || 'N/A'}
+                    </p>
+                    {load.warehouse?.palletLocation && (
+                      <p>
+                        <strong>Location:</strong> {load.warehouse.palletLocation}
+                      </p>
+                    )}
+                  </div>
+                  <div className="load-card-footer">
+                    <small>{new Date(load.createdAt).toLocaleDateString()}</small>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {selectedLoad && (
+        <div className="modal-overlay" onClick={() => setSelectedLoad(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Load Details</h2>
+              <button className="btn-close" onClick={() => setSelectedLoad(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="detail-section">
+                <h3>Basic Information</h3>
+                <p><strong>Load ID:</strong> {selectedLoad.loadId}</p>
+                <p><strong>Status:</strong> {selectedLoad.status}</p>
+                <p>
+                  <strong>Created:</strong>{' '}
+                  {new Date(selectedLoad.createdAt).toLocaleString()}
+                </p>
+              </div>
+
+              <div className="detail-section">
+                <h3>Sender</h3>
+                <p><strong>Company:</strong> {selectedLoad.sender?.company}</p>
+                <p><strong>Address:</strong> {selectedLoad.sender?.address}</p>
+              </div>
+
+              <div className="detail-section">
+                <h3>Receiver</h3>
+                <p><strong>Company:</strong> {selectedLoad.receiver?.company}</p>
+                <p><strong>Address:</strong> {selectedLoad.receiver?.address}</p>
+              </div>
+
+              {selectedLoad.warehouse?.palletLocation && (
+                <div className="detail-section">
+                  <h3>Warehouse</h3>
+                  <p>
+                    <strong>Pallet Location:</strong>{' '}
+                    {selectedLoad.warehouse.palletLocation}
+                  </p>
+                </div>
+              )}
+
+              <div className="detail-section">
+                <h3>Timeline</h3>
+                <div className="timeline">
+                  {selectedLoad.timeline?.map((event, idx) => (
+                    <div key={idx} className="timeline-event">
+                      <strong>{event.status}</strong>
+                      <p>{new Date(event.timestamp).toLocaleString()}</p>
+                      {event.notes && <p>{event.notes}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                {selectedLoad.status !== 'arrived' && (
+                  <button
+                    className="btn-next"
+                    onClick={() => {
+                      const currentIdx = STATUSES.findIndex(
+                        (s) => s.key === selectedLoad.status
+                      );
+                      if (currentIdx < STATUSES.length - 1) {
+                        handleUpdateStatus(
+                          selectedLoad._id,
+                          STATUSES[currentIdx + 1].key
+                        );
+                      }
+                    }}
+                  >
+                    Move to Next Phase
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default KanbanBoard;
