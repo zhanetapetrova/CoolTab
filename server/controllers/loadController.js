@@ -265,19 +265,20 @@ exports.createLoadFromFile = async (req, res) => {
 exports.updateLoadStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, notes, location } = req.body;
+    const { status, notes, location, actualDate } = req.body;
 
-    const now = new Date();
+    // Use provided actualDate or current time
+    const timestamp = actualDate ? new Date(actualDate) : new Date();
     const updateFields = { status };
     
     // Record actual dates based on status change
     if (status === 'in_warehouse') {
-      updateFields['actualDates.warehouseArrival'] = now;
+      updateFields['actualDates.warehouseArrival'] = timestamp;
     } else if (status === 'loading' || status === 'in_transit_to_destination') {
-      updateFields['actualDates.warehouseDispatch'] = now;
+      updateFields['actualDates.warehouseDispatch'] = timestamp;
     } else if (status === 'arrived') {
-      updateFields['actualDates.clientDelivery'] = now;
-      updateFields.actualDeliveryDate = now;
+      updateFields['actualDates.clientDelivery'] = timestamp;
+      updateFields.actualDeliveryDate = timestamp;
     }
 
     let load;
@@ -291,7 +292,7 @@ exports.updateLoadStatus = async (req, res) => {
           $push: {
             timeline: {
               status,
-              timestamp: now,
+              timestamp: timestamp,
               notes,
               location,
             },

@@ -25,6 +25,8 @@ function KanbanBoard() {
   const [showForm, setShowForm] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [statusChangeDialog, setStatusChangeDialog] = useState({ show: false, loadId: null, newStatus: null });
+  const [actualDate, setActualDate] = useState('');
 
   useEffect(() => {
     fetchLoads(selectedDate);
@@ -220,14 +222,17 @@ function KanbanBoard() {
     }
   };
 
-  const handleUpdateStatus = async (loadId, newStatus) => {
+  const handleUpdateStatus = async (loadId, newStatus, actualDate = null) => {
     try {
       await axios.patch(`${API_URL}/loads/${loadId}/status`, {
         status: newStatus,
         notes: `Moved to ${newStatus}`,
+        actualDate: actualDate || new Date().toISOString(),
       });
       fetchLoads();
       setSelectedLoad(null);
+      setStatusChangeDialog({ show: false, loadId: null, newStatus: null });
+      setActualDate('');
     } catch (error) {
       console.error('Error updating load:', error);
     }
@@ -675,23 +680,77 @@ function KanbanBoard() {
 
               <div className="modal-actions">
                 {selectedLoad.status !== 'arrived' && (
-                  <button
-                    className="btn-next"
-                    onClick={() => {
-                      const currentIdx = STATUSES.findIndex(
-                        (s) => s.key === selectedLoad.status
-                      );
-                      if (currentIdx < STATUSES.length - 1) {
-                        handleUpdateStatus(
-                          selectedLoad._id,
-                          STATUSES[currentIdx + 1].key
+                  <>
+                    <button
+                      className="btn-next"
+                      onClick={() => {
+                        const currentIdx = STATUSES.findIndex(
+                          (s) => s.key === selectedLoad.status
                         );
-                      }
-                    }}
-                  >
-                    Move to Next Phase
-                  </button>
+                        if (currentIdx < STATUSES.length - 1) {
+                          setStatusChangeDialog({
+                            show: true,
+                            loadId: selectedLoad._id,
+                            newStatus: STATUSES[currentIdx + 1].key
+                          });
+                          // Set default to today
+                          const today = new Date();
+                          const yyyy = today.getFullYear();
+                          const mm = String(today.getMonth() + 1).padStart(2, '0');
+                          const dd = String(today.getDate()).padStart(2, '0');
+                          setActualDate(`${yyyy}-${mm}-${dd}`);
+                        }
+                      }}
+                    >
+                      Move to Next Phase
+                    </button>
+                  </>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Change Date Dialog */}
+      {statusChangeDialog.show && (
+        <div className="modal-overlay" onClick={() => setStatusChangeDialog({ show: false, loadId: null, newStatus: null })}>
+          <div className="modal status-change-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Confirm Status Change</h2>
+              <button className="btn-close" onClick={() => setStatusChangeDialog({ show: false, loadId: null, newStatus: null })}>×</button>
+            </div>
+            <div className="modal-body">
+              <p>Enter the actual date for this status change:</p>
+              <div className="form-section">
+                <label><strong>Status:</strong> {statusChangeDialog.newStatus?.replace(/_/g, ' ').toUpperCase()}</label>
+                <label><strong>Actual Date:</strong></label>
+                <input
+                  type="date"
+                  value={actualDate}
+                  onChange={(e) => setActualDate(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="modal-actions">
+                <button
+                  className="btn-cancel"
+                  onClick={() => setStatusChangeDialog({ show: false, loadId: null, newStatus: null })}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn-confirm"
+                  onClick={() => {
+                    if (actualDate) {
+                      handleUpdateStatus(statusChangeDialog.loadId, statusChangeDialog.newStatus, actualDate);
+                    } else {
+                      alert('Please select a date');
+                    }
+                  }}
+                >
+                  Confirm
+                </button>
               </div>
             </div>
           </div>
