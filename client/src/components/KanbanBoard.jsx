@@ -67,6 +67,19 @@ function KanbanBoard() {
     const outList = [];
 
     loads.forEach((load) => {
+      // If load has arrived, only show it on or before its arrival date
+      if (load.status === 'arrived') {
+        const arrivedEvent = load.timeline?.find((event) => event.status === 'arrived');
+        if (arrivedEvent) {
+          const arrivalDate = new Date(arrivedEvent.timestamp);
+          arrivalDate.setHours(0, 0, 0, 0);
+          // Only include if the selected date is on or before the arrival date
+          if (start > arrivalDate) {
+            return; // Skip this load on dates after arrival
+          }
+        }
+      }
+
       const wDate = load.warehouse?.incomingDate ? new Date(load.warehouse.incomingDate) : null;
       const tDate = load.transport?.dispatchDate ? new Date(load.transport.dispatchDate) : null;
       const topIn = load.incomingDate ? new Date(load.incomingDate) : null;
