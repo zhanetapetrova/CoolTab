@@ -37,29 +37,105 @@ function Calendar() {
   };
 
   const getLoadsByDateAndType = (date) => {
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
+    const selectedDay = normalizeDate(date);
+    if (!selectedDay) return { in: [], out: [] };
 
     const inList = [];
     const outList = [];
 
     loads.forEach((load) => {
-      const wDate = load.warehouse?.incomingDate ? new Date(load.warehouse.incomingDate) : null;
-      const tDate = load.transport?.dispatchDate ? new Date(load.transport.dispatchDate) : null;
-      const topIn = load.incomingDate ? new Date(load.incomingDate) : null;
-      const expected = load.expectedDeliveryDate ? new Date(load.expectedDeliveryDate) : null;
+      let showInIN = false;
+      let showInOUT = false;
 
-      const inMatch = (d) => d && d >= start && d < end;
-
-      if (inMatch(wDate) || inMatch(topIn) || inMatch(expected)) {
-        inList.push(load);
+      // Rule 1: Order Received - only on creation date or planned warehouse arrival
+      if (load.status === 'order_received') {
+        const orderDate = load.createdAt ? new Date(load.createdAt) : null;
+        const plannedArrival = load.plannedDates?.warehouseArrival;
+        if (isDateOnDay(orderDate, selectedDay) || isDateOnDay(plannedArrival, selectedDay)) {
+          showInIN = true;
+        }
       }
 
-      if (inMatch(tDate) || (load.status === 'loading' && inMatch(load.createdAt))) {
-        outList.push(load);
+      // Rule 2: In Transit to Warehouse - from start until unloading
+      if (load.status === 'in_transit_to_warehouse') {
+        const transitStart = getStatusDate(load, 'in_transit_to_warehouse') || load.createdAt;
+        const unloadingDate = getStatusDate(load, 'unloading');
+        if (isDateBetween(selectedDay, transitStart, unloadingDate)) {
+          showInIN = true;
+        }
       }
+
+      // Rule 3: Unloading - ONLY on unloading date (one day only)
+      if (load.status === 'unloading') {
+        const unloadingDate = getStatusDate(load, 'unloading');
+        if (isDateOnDay(unloadingDate, selectedDay)) {
+          showInIN = true;
+        }
+      }
+
+      // Rule 4: In Warehouse - from unloading date until transport issued
+      if (load.status === 'in_warehouse') {
+        const warehouseStart = getStatusDate(load, 'in_warehouse') || 
+                              getStatusDate(load, 'unloading') ||
+                              load.actualDates?.warehouseArrival;
+        const transportIssuedDate = getStatusDate(load, 'transport_issued');
+        if (isDateBetween(selectedDay, warehouseStart, transportIssuedDate)) {
+          showInIN = true;
+        }
+      }
+
+      // Rule 5: Transport Issued - transitional (show on issue date)
+      if (load.status === 'transport_issued') {
+        const issuedDate = getStatusDate(load, 'transport_issued');
+        if (isDateOnDay(issuedDate, selectedDay)) {
+          showInOUT = true;
+        }
+      }
+
+      // Rule 6: Loading - ONLY on 1 day (loading date only)
+      if (load.status === 'loading') {
+        const loadingDate = getStatusDate(load, 'loading') || 
+                           load.transport?.dispatchDate ||
+                           load.plannedDates?.warehouseDispatch;
+        if (isDateOnDay(loadingDate, selectedDay)) {
+          showInOUT = true;
+        }
+      }
+
+      // Rule 7: In Transit to Destination - from loading/dispatch until arrived
+      if (load.status === 'in_transit_to_destination') {
+        const transitStart = getStatusDate(load, 'in_transit_to_destination') ||
+                            getStatusDate(load, 'loading') ||
+                            load.actualDates?.warehouseDispatch;
+        const arrivedDate = getStatusDate(load, 'arrived') || load.actualDates?.clientDelivery;
+        
+        // Only show if we're in the transit period (before arrival)
+        if (arrivedDate) {
+          const arrivalDay = normalizeDate(arrivedDate);
+          if (arrivalDay && selectedDay.getTime() >= arrivalDay.getTime()) {
+            // Don't show on or after arrival day
+            return;
+          }
+        }
+        
+        if (isDateBetween(selectedDay, transitStart, arrivedDate)) {
+          showInOUT = true;
+        }
+      }
+
+      // Rule 8: Arrived - only on arrival date
+      if (load.status === 'arrived') {
+        const arrivedDate = getStatusDate(load, 'arrived') || 
+                           load.actualDates?.clientDelivery;
+        
+        // ONLY show on the exact arrival date
+        if (arrivedDate && isDateOnDay(arrivedDate, selectedDay)) {
+          showInOUT = true;
+        }
+      }
+
+      if (showInIN) inList.push(load);
+      if (showInOUT) outList.push(load);
     });
 
     return { in: inList, out: outList };
