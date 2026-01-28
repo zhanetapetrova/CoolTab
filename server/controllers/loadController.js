@@ -118,6 +118,7 @@ exports.getLoadsByDate = async (req, res) => {
           { 'warehouse.incomingDate': { $gte: start, $lt: end } },
           { 'transport.dispatchDate': { $gte: start, $lt: end } },
           { incomingDate: { $gte: start, $lt: end } },
+          { status: 'arrived' }, // Always include loads that have arrived, regardless of date
         ],
       }).sort({ createdAt: -1 });
     }

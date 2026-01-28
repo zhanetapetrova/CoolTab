@@ -288,10 +288,10 @@
   background-color: #fafafa;
   border: 1px solid #eee;
   border-radius: 6px;
-  padding: 12px 8px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   transition: all 0.2s;
   min-height: 100%;
   height: 100%;
@@ -312,7 +312,7 @@
 .detailed-day-header {
   text-align: center;
   border-bottom: 2px solid #ddd;
-  padding-bottom: 6px;
+  padding-bottom: 8px;
 }
 
 .detailed-day-number {
@@ -331,7 +331,7 @@
 
 .detailed-columns {
   display: flex;
-  gap: 3px;
+  gap: 6px;
   flex: 1;
   min-height: 300px;
   height: 100%;
@@ -341,8 +341,8 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 4px;
+  gap: 4px;
+  padding: 6px;
   border-radius: 3px;
   background-color: white;
   min-height: 100%;
@@ -370,7 +370,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   overflow-y: auto;
   min-height: 200px;
   height: 100%;
@@ -378,14 +378,14 @@
 
 .detailed-load-card {
   background-color: #f5f5f5;
-  padding: 6px 4px;
+  padding: 8px 6px;
   border-radius: 3px;
   border: 1px solid #ddd;
   cursor: pointer;
   transition: all 0.2s;
   font-size: 0.8rem;
   text-align: center;
-  min-height: 30px;
+  min-height: 35px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -710,6 +710,125 @@
 
 .btn-next:hover {
   background-color: #45a049;
+}
+
+/* Status Timeline View Styles */
+.timeline-scroll.status-view {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 280px);
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.status-header {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.status-columns-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  height: 100%;
+}
+
+.status-column {
+  background-color: #f0f0f0;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  min-height: 300px;
+  overflow: hidden;
+}
+
+.status-column-header {
+  background-color: #2196F3;
+  color: white;
+  padding: 12px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-align: center;
+  border-bottom: 2px solid #1976D2;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-wrap: wrap;
+}
+
+.status-load-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.status-load-card {
+  background-color: white;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.status-load-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  border-color: #2196F3;
+}
+
+.status-qr-code {
+  width: 60px;
+  height: 60px;
+  align-self: center;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+}
+
+.status-load-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+}
+
+.status-load-company {
+  font-weight: 700;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-load-dates {
+  color: #666;
+  font-size: 0.7rem;
+  line-height: 1.3;
+}
+
+.status-load-dates div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty-status-column {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: #999;
+  flex: 1;
 }
 
 @media (max-width: 768px) {

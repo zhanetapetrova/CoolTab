@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import DayView from './DayView';
 import './Calendar.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -12,7 +11,6 @@ function Calendar() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [viewType, setViewType] = useState('week'); // 'year', 'day', 'week', '2weeks', '3weeks'
   const [referenceDate, setReferenceDate] = useState(new Date());
-  const [dayViewDate, setDayViewDate] = useState(null);
 
   const STATUSES = [
     { key: 'order_received', label: 'Order Received' },
@@ -401,7 +399,6 @@ function Calendar() {
                             key={dayIdx}
                             className={`timeline-day ${today ? 'today' : ''}`}
                             title={date.toLocaleDateString()}
-                            onDoubleClick={() => setDayViewDate(date.toISOString())}
                           >
                             <div className="day-number">{date.getDate()}</div>
                             <div className="day-columns">
@@ -457,6 +454,69 @@ function Calendar() {
         (() => {
           const dateRange = getDateRange();
           
+          // For day view, show status timeline; for other views, show IN/OUT columns
+          if (viewType === 'day') {
+            return (
+              <div className={`timeline-wrapper ${viewType}-view`}>
+                <div className="timeline-label">STATUS TIMELINE</div>
+                <div className="timeline-scroll status-view">
+                  <div className="status-header">
+                    <span>Date: {referenceDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+                  </div>
+                  <div className="status-columns-container">
+                    {STATUSES.map((statusObj, idx) => {
+                      const loadsInStatus = loads.filter(load => load.status === statusObj.key);
+                      return (
+                        <div key={idx} className="status-column">
+                          <div className="status-column-header">
+                            {statusObj.label}
+                          </div>
+                          <div className="status-load-list">
+                            {loadsInStatus.map((load) => (
+                              <div
+                                key={load._id}
+                                className="status-load-card"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedLoad(load);
+                                }}
+                              >
+                                {load.barcode?.qrCodeData && (
+                                  <img
+                                    src={load.barcode.qrCodeData}
+                                    alt="QR"
+                                    className="status-qr-code"
+                                  />
+                                )}
+                                <div className="status-load-info">
+                                  <div className="status-load-company">
+                                    <strong>{load.sender?.company?.substring(0, 20)}</strong>
+                                  </div>
+                                  <div className="status-load-dates">
+                                    {load.warehouse?.incomingDate && (
+                                      <div>In: {new Date(load.warehouse.incomingDate).toLocaleDateString()}</div>
+                                    )}
+                                    {load.expectedDeliveryDate && (
+                                      <div>Del: {new Date(load.expectedDeliveryDate).toLocaleDateString()}</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                            {loadsInStatus.length === 0 && (
+                              <div className="empty-status-column">—</div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // Default: IN/OUT columns for week/2weeks/3weeks
           return (
             <div className={`timeline-wrapper ${viewType}-view`}>
               <div className="timeline-label">ТОВАРИ</div>
@@ -472,7 +532,6 @@ function Calendar() {
                         key={idx}
                         className={`detailed-day ${today ? 'today' : ''}`}
                         title={date.toLocaleDateString()}
-                        onDoubleClick={() => setDayViewDate(date.toISOString())}
                       >
                         <div className="detailed-day-header">
                           <div className="detailed-day-number">{date.getDate()}</div>
@@ -618,21 +677,6 @@ function Calendar() {
             </div>
           </div>
         </div>
-      )}
-
-      {dayViewDate && (
-        <DayView
-          date={dayViewDate}
-          loads={loads}
-          onClose={() => setDayViewDate(null)}
-          onLoadClick={(load) => {
-            setSelectedLoad(load);
-            setDayViewDate(null);
-          }}
-          onStatusChange={() => {
-            fetchLoads();
-          }}
-        />
       )}
     </div>
   );
