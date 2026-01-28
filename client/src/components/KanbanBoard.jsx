@@ -133,27 +133,36 @@ function KanbanBoard() {
     return event ? new Date(event.timestamp) : null;
   };
 
+  // Helper: Normalize date to midnight
+  const normalizeDate = (date) => {
+    if (!date) return null;
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
   // Helper: Check if date is on selected day
   const isDateOnDay = (date, selectedDay) => {
     if (!date) return false;
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
+    const d = normalizeDate(date);
+    if (!d) return false;
     return d.getTime() === selectedDay.getTime();
   };
 
   // Helper: Check if selected day is between two dates (inclusive)
   const isDateBetween = (selectedDay, startDate, endDate) => {
     if (!startDate) return false;
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
+    const start = normalizeDate(startDate);
+    if (!start) return false;
     
     if (!endDate) {
       // If no end date, check if selected day is on or after start
       return selectedDay.getTime() >= start.getTime();
     }
     
-    const end = new Date(endDate);
-    end.setHours(0, 0, 0, 0);
+    const end = normalizeDate(endDate);
+    if (!end) return selectedDay.getTime() >= start.getTime();
+    
     return selectedDay.getTime() >= start.getTime() && selectedDay.getTime() <= end.getTime();
   };
 
@@ -230,7 +239,18 @@ function KanbanBoard() {
         const transitStart = getStatusDate(load, 'in_transit_to_destination') ||
                             getStatusDate(load, 'loading') ||
                             load.actualDates?.warehouseDispatch;
-        const arrivedDate = getStatusDate(load, 'arrived');
+        const arrivedDate = getStatusDate(load, 'arrived') || load.actualDates?.clientDelivery;
+        
+        // Only show if we're in the transit period (before arrival)
+        if (arrivedDate) {
+          // If already arrived, only show up to and including the day before arrival
+          const arrivalDay = normalizeDate(arrivedDate);
+          if (arrivalDay && selectedDay.getTime() >= arrivalDay.getTime()) {
+            // Don't show on or after arrival day
+            return;
+          }
+        }
+        
         if (isDateBetween(selectedDay, transitStart, arrivedDate)) {
           showInOUT = true;
         }
@@ -239,9 +259,10 @@ function KanbanBoard() {
       // Rule 8: Arrived - only on arrival date
       if (load.status === 'arrived') {
         const arrivedDate = getStatusDate(load, 'arrived') || 
-                           load.actualDates?.clientDelivery ||
-                           load.expectedDeliveryDate;
-        if (isDateOnDay(arrivedDate, selectedDay)) {
+                           load.actualDates?.clientDelivery;
+        
+        // ONLY show on the exact arrival date
+        if (arrivedDate && isDateOnDay(arrivedDate, selectedDay)) {
           showInOUT = true;
         }
       }
