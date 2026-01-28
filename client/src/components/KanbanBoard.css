@@ -315,7 +315,8 @@
   border-top: 1px solid #e9ecef;
   display: flex;
   gap: 10px;
-  justify-content: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 .btn-next {
@@ -331,6 +332,21 @@
 
 .btn-next:hover {
   background: #218838;
+}
+
+.btn-prev {
+  padding: 10px 20px;
+  background: #ffc107;
+  color: #333;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.btn-prev:hover {
+  background: #e0a800;
 }
 
 .btn-cancel {

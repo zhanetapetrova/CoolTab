@@ -216,10 +216,11 @@ function KanbanBoard() {
         }
       }
 
-      // Rule 5: Transport Issued - transitional (show on issue date)
+      // Rule 5: Transport Issued - show from issue date until loading starts
       if (load.status === 'transport_issued') {
         const issuedDate = getStatusDate(load, 'transport_issued');
-        if (isDateOnDay(issuedDate, selectedDay)) {
+        const loadingDate = getStatusDate(load, 'loading');
+        if (isDateBetween(selectedDay, issuedDate, loadingDate)) {
           showInOUT = true;
         }
       }
@@ -805,6 +806,31 @@ function KanbanBoard() {
                       Move to Next Phase
                     </button>
                   </>
+                )}
+                {selectedLoad.status !== 'order_received' && (
+                  <button
+                    className="btn-prev"
+                    onClick={() => {
+                      const currentIdx = STATUSES.findIndex(
+                        (s) => s.key === selectedLoad.status
+                      );
+                      if (currentIdx > 0) {
+                        setStatusChangeDialog({
+                          show: true,
+                          loadId: selectedLoad._id,
+                          newStatus: STATUSES[currentIdx - 1].key
+                        });
+                        // Set default to today
+                        const today = new Date();
+                        const yyyy = today.getFullYear();
+                        const mm = String(today.getMonth() + 1).padStart(2, '0');
+                        const dd = String(today.getDate()).padStart(2, '0');
+                        setActualDate(`${yyyy}-${mm}-${dd}`);
+                      }
+                    }}
+                  >
+                    Undo / Move to Previous Phase
+                  </button>
                 )}
               </div>
             </div>
