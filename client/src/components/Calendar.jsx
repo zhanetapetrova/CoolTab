@@ -244,6 +244,19 @@ function Calendar() {
           </button>
         </div>
         <div className="header-actions">
+          {viewType !== 'year' && (
+            <div className="go-to-date-control">
+              <input 
+                type="date" 
+                value={referenceDate.toISOString().split('T')[0]}
+                onChange={(e) => {
+                  const selectedDate = new Date(e.target.value + 'T00:00:00');
+                  setReferenceDate(selectedDate);
+                }}
+                className="date-input"
+              />
+            </div>
+          )}
           <button className="btn-create" onClick={() => setShowForm(!showForm)}>
             {showForm ? 'Cancel' : '+ New Load'}
           </button>
