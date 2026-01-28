@@ -9,7 +9,7 @@ function Calendar() {
   const [selectedLoad, setSelectedLoad] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [year, setYear] = useState(new Date().getFullYear());
-  const [viewType, setViewType] = useState('year'); // 'year', 'day', 'week', '2weeks', '3weeks'
+  const [viewType, setViewType] = useState('week'); // 'year', 'day', 'week', '2weeks', '3weeks'
   const [referenceDate, setReferenceDate] = useState(new Date());
 
   const STATUSES = [
@@ -532,19 +532,9 @@ function Calendar() {
               <button className="btn-close" onClick={() => setSelectedLoad(null)}>×</button>
             </div>
             <div className="modal-body">
-              <div className="detail-section">
-                <h3>Basic Information</h3>
-                <p><strong>Load ID:</strong> {selectedLoad.loadId}</p>
-                <p><strong>Status:</strong> {selectedLoad.status}</p>
-                <p>
-                  <strong>Created:</strong>{' '}
-                  {new Date(selectedLoad.createdAt).toLocaleString()}
-                </p>
-              </div>
-
               {selectedLoad.barcode?.qrCodeData && (
-                <div className="detail-section barcode-section">
-                  <h3>QR Code</h3>
+                <div className="detail-section barcode-section barcode-featured">
+                  <h3>QR Code / Barcode</h3>
                   <div className="barcode-container">
                     <img
                       src={selectedLoad.barcode.qrCodeData}
@@ -555,6 +545,16 @@ function Calendar() {
                   </div>
                 </div>
               )}
+
+              <div className="detail-section">
+                <h3>Basic Information</h3>
+                <p><strong>Load ID:</strong> {selectedLoad.loadId}</p>
+                <p><strong>Status:</strong> {selectedLoad.status}</p>
+                <p>
+                  <strong>Created:</strong>{' '}
+                  {new Date(selectedLoad.createdAt).toLocaleString()}
+                </p>
+              </div>
 
               <div className="detail-section">
                 <h3>Sender</h3>

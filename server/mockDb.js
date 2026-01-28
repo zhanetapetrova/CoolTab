@@ -2,9 +2,27 @@
 // This allows running the app without MongoDB installed
 
 const { v4: uuidv4 } = require('uuid');
+const QRCode = require('qrcode');
 
 let loads = [];
 let nextId = 1;
+
+// Generate QR Code for load
+const generateQRCode = async (loadId) => {
+  try {
+    const qrDataUrl = await QRCode.toDataURL(loadId, {
+      errorCorrectionLevel: 'H',
+      type: 'image/png',
+      quality: 0.95,
+      margin: 1,
+      width: 200,
+    });
+    return qrDataUrl;
+  } catch (error) {
+    console.error('Error generating QR code:', error);
+    return null;
+  }
+};
 
 const mockDb = {
   // Load operations
@@ -17,6 +35,17 @@ const mockDb = {
       updatedAt: new Date(),
       timeline: loadData.timeline || [],
     };
+
+    // Generate QR code
+    const qrCodeData = await generateQRCode(load.loadId);
+    if (qrCodeData) {
+      load.barcode = {
+        qrCodeData,
+        barcodeId: load.loadId,
+        generatedAt: new Date(),
+      };
+    }
+
     loads.push(load);
     return load;
   },
@@ -174,12 +203,28 @@ const mockDb = {
       },
     ];
 
-    loads = sampleLoads.map((load) => ({
-      _id: uuidv4(),
-      ...load,
-      createdAt: new Date(today.getTime() - 172800000),
-      updatedAt: new Date(),
-    }));
+    loads = await Promise.all(
+      sampleLoads.map(async (load) => {
+        const newLoad = {
+          _id: uuidv4(),
+          ...load,
+          createdAt: new Date(today.getTime() - 172800000),
+          updatedAt: new Date(),
+        };
+
+        // Generate QR code for each sample load
+        const qrCodeData = await generateQRCode(newLoad.loadId);
+        if (qrCodeData) {
+          newLoad.barcode = {
+            qrCodeData,
+            barcodeId: newLoad.loadId,
+            generatedAt: new Date(),
+          };
+        }
+
+        return newLoad;
+      })
+    );
 
     console.log(`✓ Seeded ${loads.length} sample loads`);
     return loads;
