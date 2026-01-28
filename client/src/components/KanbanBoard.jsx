@@ -127,48 +127,127 @@ function KanbanBoard() {
     return loads.filter((load) => load.status === status);
   };
 
+  // Helper: Get date from timeline for a specific status
+  const getStatusDate = (load, status) => {
+    const event = load.timeline?.find((e) => e.status === status);
+    return event ? new Date(event.timestamp) : null;
+  };
+
+  // Helper: Check if date is on selected day
+  const isDateOnDay = (date, selectedDay) => {
+    if (!date) return false;
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() === selectedDay.getTime();
+  };
+
+  // Helper: Check if selected day is between two dates (inclusive)
+  const isDateBetween = (selectedDay, startDate, endDate) => {
+    if (!startDate) return false;
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    
+    if (!endDate) {
+      // If no end date, check if selected day is on or after start
+      return selectedDay.getTime() >= start.getTime();
+    }
+    
+    const end = new Date(endDate);
+    end.setHours(0, 0, 0, 0);
+    return selectedDay.getTime() >= start.getTime() && selectedDay.getTime() <= end.getTime();
+  };
+
   // For day view: IN = arriving in warehouse on selectedDate; OUT = dispatch/loaded on selectedDate
   const getDayInOut = (date) => {
     if (!date) return { in: [], out: [] };
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
+    const selectedDay = new Date(date);
+    selectedDay.setHours(0, 0, 0, 0);
 
     const inList = [];
     const outList = [];
 
     loads.forEach((load) => {
-      // If load has arrived, only show it on or before its arrival date
-      if (load.status === 'arrived') {
-        const arrivedEvent = load.timeline?.find((event) => event.status === 'arrived');
-        const arrivalDate = arrivedEvent 
-          ? new Date(arrivedEvent.timestamp)
-          : (load.expectedDeliveryDate ? new Date(load.expectedDeliveryDate) : null);
-        
-        if (arrivalDate) {
-          arrivalDate.setHours(0, 0, 0, 0);
-          // Only include if the selected date is on or before the arrival date
-          if (start > arrivalDate) {
-            return; // Skip this load on dates after arrival
-          }
+      let showInIN = false;
+      let showInOUT = false;
+
+      // Rule 1: Order Received - only on creation date or planned warehouse arrival
+      if (load.status === 'order_received') {
+        const orderDate = load.createdAt ? new Date(load.createdAt) : null;
+        const plannedArrival = load.plannedDates?.warehouseArrival;
+        if (isDateOnDay(orderDate, selectedDay) || isDateOnDay(plannedArrival, selectedDay)) {
+          showInIN = true;
         }
       }
 
-      const wDate = load.warehouse?.incomingDate ? new Date(load.warehouse.incomingDate) : null;
-      const tDate = load.transport?.dispatchDate ? new Date(load.transport.dispatchDate) : null;
-      const topIn = load.incomingDate ? new Date(load.incomingDate) : null;
-      const expected = load.expectedDeliveryDate ? new Date(load.expectedDeliveryDate) : null;
-
-      const inMatch = (d) => d && d >= start && d < end;
-
-      if (inMatch(wDate) || inMatch(topIn) || inMatch(expected)) {
-        inList.push(load);
+      // Rule 2: In Transit to Warehouse - from start until unloading
+      if (load.status === 'in_transit_to_warehouse') {
+        const transitStart = getStatusDate(load, 'in_transit_to_warehouse') || load.createdAt;
+        const unloadingDate = getStatusDate(load, 'unloading');
+        if (isDateBetween(selectedDay, transitStart, unloadingDate)) {
+          showInIN = true;
+        }
       }
 
-      if (inMatch(tDate) || (load.status === 'loading' && inMatch(load.createdAt))) {
-        outList.push(load);
+      // Rule 3: Unloading - transitional (show on unloading date)
+      if (load.status === 'unloading') {
+        const unloadingDate = getStatusDate(load, 'unloading');
+        if (isDateOnDay(unloadingDate, selectedDay)) {
+          showInIN = true;
+        }
       }
+
+      // Rule 4: In Warehouse - from unloading date until transport issued
+      if (load.status === 'in_warehouse') {
+        const warehouseStart = getStatusDate(load, 'in_warehouse') || 
+                              getStatusDate(load, 'unloading') ||
+                              load.actualDates?.warehouseArrival;
+        const transportIssuedDate = getStatusDate(load, 'transport_issued');
+        if (isDateBetween(selectedDay, warehouseStart, transportIssuedDate)) {
+          showInIN = true;
+        }
+      }
+
+      // Rule 5: Transport Issued - transitional (show on issue date)
+      if (load.status === 'transport_issued') {
+        const issuedDate = getStatusDate(load, 'transport_issued');
+        if (isDateOnDay(issuedDate, selectedDay)) {
+          showInOUT = true;
+        }
+      }
+
+      // Rule 6: Loading - only on 1 day (loading date)
+      if (load.status === 'loading') {
+        const loadingDate = getStatusDate(load, 'loading') || 
+                           load.transport?.dispatchDate ||
+                           load.plannedDates?.warehouseDispatch;
+        if (isDateOnDay(loadingDate, selectedDay)) {
+          showInOUT = true;
+        }
+      }
+
+      // Rule 7: In Transit to Destination - from loading/dispatch until arrived
+      if (load.status === 'in_transit_to_destination') {
+        const transitStart = getStatusDate(load, 'in_transit_to_destination') ||
+                            getStatusDate(load, 'loading') ||
+                            load.actualDates?.warehouseDispatch;
+        const arrivedDate = getStatusDate(load, 'arrived');
+        if (isDateBetween(selectedDay, transitStart, arrivedDate)) {
+          showInOUT = true;
+        }
+      }
+
+      // Rule 8: Arrived - only on arrival date
+      if (load.status === 'arrived') {
+        const arrivedDate = getStatusDate(load, 'arrived') || 
+                           load.actualDates?.clientDelivery ||
+                           load.expectedDeliveryDate;
+        if (isDateOnDay(arrivedDate, selectedDay)) {
+          showInOUT = true;
+        }
+      }
+
+      if (showInIN) inList.push(load);
+      if (showInOUT) outList.push(load);
     });
 
     return { in: inList, out: outList };
