@@ -23,6 +23,11 @@ const LoadSchema = new mongoose.Schema(
       default: 'order_received',
       required: true,
     },
+    barcode: {
+      qrCodeData: String, // Base64 encoded QR code image
+      barcodeId: String, // Unique barcode identifier
+      generatedAt: { type: Date, default: Date.now },
+    },
     items: [
       {
         itemId: String,

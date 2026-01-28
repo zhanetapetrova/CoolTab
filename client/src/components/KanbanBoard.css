@@ -273,3 +273,121 @@
 .btn-next:hover {
   background: #218838;
 }
+/* Drag and Drop Zone */
+.drag-drop-zone {
+  background: linear-gradient(135deg, #f0f7ff 0%, #f5f0ff 100%);
+  border: 2px dashed #007bff;
+  border-radius: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  margin-bottom: 20px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  min-height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.drag-drop-zone.active {
+  background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+  border-color: #0056b3;
+  box-shadow: 0 8px 16px rgba(0, 123, 255, 0.2);
+}
+
+.drag-drop-zone.uploading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.drag-drop-content {
+  width: 100%;
+}
+
+.drag-drop-icon {
+  width: 48px;
+  height: 48px;
+  color: #007bff;
+  margin: 0 auto 12px;
+  display: block;
+}
+
+.drag-drop-zone h3 {
+  margin: 0 0 8px 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.drag-drop-zone p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.uploading-text {
+  color: #007bff !important;
+  font-weight: 600;
+  margin-top: 12px !important;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Barcode Styling */
+.qr-code-mini {
+  width: 50px;
+  height: 50px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 2px;
+  display: inline-block;
+}
+
+.qr-code-mini img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.load-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.barcode-section {
+  text-align: center;
+}
+
+.barcode-container {
+  background: #f9f9f9;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 15px;
+  display: inline-block;
+}
+
+.barcode-image {
+  max-width: 200px;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  background: white;
+  padding: 8px;
+}
+
+.barcode-id {
+  margin: 8px 0 0 0;
+  font-size: 12px;
+  color: #666;
+  font-family: monospace;
+  word-break: break-all;
+}

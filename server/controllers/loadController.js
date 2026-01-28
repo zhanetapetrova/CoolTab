@@ -1,4 +1,67 @@
 const Load = require('../models/Load');
+const QRCode = require('qrcode');
+const { simpleParser } = require('mailparser');
+const fs = require('fs');
+const path = require('path');
+
+// Generate QR Code for load
+const generateQRCode = async (loadId) => {
+  try {
+    const qrDataUrl = await QRCode.toDataURL(loadId, {
+      errorCorrectionLevel: 'H',
+      type: 'image/png',
+      quality: 0.95,
+      margin: 1,
+      width: 200,
+    });
+    return qrDataUrl;
+  } catch (error) {
+    console.error('Error generating QR code:', error);
+    return null;
+  }
+};
+
+// Extract text from file (basic implementation)
+const extractFileInfo = async (fileBuffer, filename) => {
+  const ext = path.extname(filename).toLowerCase();
+  
+  try {
+    if (ext === '.eml' || ext === '.txt' && filename.includes('mail')) {
+      // Parse email
+      const parsed = await simpleParser(fileBuffer);
+      return {
+        source: filename,
+        type: 'email',
+        subject: parsed.subject || 'No subject',
+        from: parsed.from?.text || 'Unknown',
+        date: parsed.date || new Date(),
+        text: parsed.text?.substring(0, 500) || '',
+      };
+    } else if (ext === '.txt') {
+      // Parse text
+      const text = fileBuffer.toString('utf-8');
+      return {
+        source: filename,
+        type: 'text',
+        content: text.substring(0, 500),
+      };
+    } else {
+      // For PDF and images, just return file info
+      return {
+        source: filename,
+        type: ext.replace('.', ''),
+        uploadDate: new Date(),
+      };
+    }
+  } catch (error) {
+    console.error('Error extracting file info:', error);
+    return {
+      source: filename,
+      type: ext.replace('.', ''),
+      uploadDate: new Date(),
+    };
+  }
+};
 
 // Get all loads
 exports.getAllLoads = async (req, res) => {
@@ -35,7 +98,7 @@ exports.getLoad = async (req, res) => {
 // Create new load
 exports.createLoad = async (req, res) => {
   try {
-    const { sender, receiver, items, expectedDeliveryDate } = req.body;
+    const { sender, receiver, items, expectedDeliveryDate, fileInfo } = req.body;
     
     const load = new Load({
       sender,
@@ -46,7 +109,75 @@ exports.createLoad = async (req, res) => {
     });
 
     await load.save();
+
+    // Generate QR code for the load ID
+    const qrCodeData = await generateQRCode(load.loadId);
+    if (qrCodeData) {
+      load.barcode = {
+        qrCodeData,
+        barcodeId: load.loadId,
+        generatedAt: new Date(),
+      };
+      await load.save();
+    }
+
     res.status(201).json(load);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Create load from file upload
+exports.createLoadFromFile = async (req, res) => {
+  try {
+    const fileBuffer = req.body.fileBuffer; // Base64 encoded
+    const fileName = req.body.fileName;
+    const senderCompany = req.body.senderCompany || 'From File Upload';
+    const receiverCompany = req.body.receiverCompany || 'Pending';
+
+    // Decode base64 if necessary
+    const buffer = Buffer.from(fileBuffer, 'base64');
+
+    // Extract file information
+    const fileInfo = await extractFileInfo(buffer, fileName);
+
+    const load = new Load({
+      sender: {
+        company: senderCompany,
+        address: `File: ${fileName}`,
+        contact: fileInfo.from || 'N/A',
+      },
+      receiver: {
+        company: receiverCompany,
+        address: 'To be determined',
+        contact: 'N/A',
+      },
+      items: [
+        {
+          description: fileInfo.subject || `${fileInfo.type.toUpperCase()} - ${fileName}`,
+          quantity: 1,
+        },
+      ],
+      status: 'order_received',
+    });
+
+    await load.save();
+
+    // Generate QR code for the load
+    const qrCodeData = await generateQRCode(load.loadId);
+    if (qrCodeData) {
+      load.barcode = {
+        qrCodeData,
+        barcodeId: load.loadId,
+        generatedAt: new Date(),
+      };
+      await load.save();
+    }
+
+    res.status(201).json({
+      ...load.toObject(),
+      fileInfo,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

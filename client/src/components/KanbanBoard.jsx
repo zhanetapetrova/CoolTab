@@ -15,10 +15,15 @@ const STATUSES = [
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
+// Supported file types for drag-and-drop
+const SUPPORTED_FILE_TYPES = ['email', 'pdf', 'gif', 'png', 'jpg', 'jpeg', 'txt', 'eml', 'msg', 'doc', 'docx', 'xlsx', 'xls'];
+
 function KanbanBoard() {
   const [loads, setLoads] = useState([]);
   const [selectedLoad, setSelectedLoad] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetchLoads();
@@ -84,6 +89,70 @@ function KanbanBoard() {
     }
   };
 
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  const getFileType = (filename) => {
+    const ext = filename.split('.').pop().toLowerCase();
+    return ext;
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      setUploading(true);
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileType = getFileType(file.name);
+
+        if (!SUPPORTED_FILE_TYPES.includes(fileType)) {
+          alert(`File type .${fileType} not supported. Supported: email, PDF, GIF, PNG, JPG, TXT`);
+          continue;
+        }
+
+        try {
+          const fileBase64 = await fileToBase64(file);
+          
+          const response = await axios.post(`${API_URL}/loads/upload/file`, {
+            fileName: file.name,
+            fileBuffer: fileBase64,
+            senderCompany: `File: ${file.name}`,
+            receiverCompany: 'Pending',
+          });
+
+          console.log('Load created from file:', response.data);
+        } catch (error) {
+          console.error('Error uploading file:', error);
+          alert(`Error creating order from ${file.name}`);
+        }
+      }
+
+      setUploading(false);
+      fetchLoads();
+    }
+  };
+
   return (
     <div className="kanban-container">
       <div className="header">
@@ -91,6 +160,24 @@ function KanbanBoard() {
         <button className="btn-create" onClick={() => setShowForm(!showForm)}>
           {showForm ? 'Cancel' : '+ New Load'}
         </button>
+      </div>
+
+      {/* Drag and Drop Zone */}
+      <div
+        className={`drag-drop-zone ${dragActive ? 'active' : ''} ${uploading ? 'uploading' : ''}`}
+        onDragEnter={handleDrag}
+        onDragLeave={handleDrag}
+        onDragOver={handleDrag}
+        onDrop={handleDrop}
+      >
+        <div className="drag-drop-content">
+          <svg className="drag-drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+          </svg>
+          <h3>Drag & Drop Files Here</h3>
+          <p>Email • PDF • Word • Excel • Images (PNG, GIF, JPG) • Text</p>
+          {uploading && <p className="uploading-text">Creating orders...</p>}
+        </div>
       </div>
 
       {showForm && (
@@ -138,6 +225,11 @@ function KanbanBoard() {
                 >
                   <div className="load-card-header">
                     <strong>ID: {load.loadId.substring(0, 8)}</strong>
+                    {load.barcode?.qrCodeData && (
+                      <div className="qr-code-mini">
+                        <img src={load.barcode.qrCodeData} alt="QR Code" title="QR Code" />
+                      </div>
+                    )}
                   </div>
                   <div className="load-card-body">
                     <p>
@@ -179,6 +271,20 @@ function KanbanBoard() {
                   {new Date(selectedLoad.createdAt).toLocaleString()}
                 </p>
               </div>
+
+              {selectedLoad.barcode?.qrCodeData && (
+                <div className="detail-section barcode-section">
+                  <h3>QR Code</h3>
+                  <div className="barcode-container">
+                    <img 
+                      src={selectedLoad.barcode.qrCodeData} 
+                      alt="QR Code"
+                      className="barcode-image"
+                    />
+                    <p className="barcode-id">{selectedLoad.barcode.barcodeId}</p>
+                  </div>
+                </div>
+              )}
 
               <div className="detail-section">
                 <h3>Sender</h3>

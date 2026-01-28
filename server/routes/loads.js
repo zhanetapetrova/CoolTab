@@ -14,6 +14,9 @@ router.get('/:id', loadController.getLoad);
 // Create new load
 router.post('/', loadController.createLoad);
 
+// Create load from file upload
+router.post('/upload/file', loadController.createLoadFromFile);
+
 // Update load status (transition through phases)
 router.patch('/:id/status', loadController.updateLoadStatus);
 
