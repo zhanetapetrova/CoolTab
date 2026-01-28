@@ -9,6 +9,8 @@ function Calendar() {
   const [selectedLoad, setSelectedLoad] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [viewType, setViewType] = useState('year'); // 'year', 'day', 'week', '2weeks', '3weeks'
+  const [referenceDate, setReferenceDate] = useState(new Date());
 
   const STATUSES = [
     { key: 'order_received', label: 'Order Received' },
@@ -75,6 +77,49 @@ function Calendar() {
 
   const getDaysInYear = (y) => {
     return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 366 : 365;
+  };
+
+  const getWeekStartDate = (date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(d.setDate(diff));
+  };
+
+  const getDateRange = () => {
+    const range = [];
+    let startDate;
+    let numDays = 1;
+
+    switch (viewType) {
+      case 'day':
+        startDate = new Date(referenceDate);
+        numDays = 1;
+        break;
+      case 'week':
+        startDate = getWeekStartDate(referenceDate);
+        numDays = 7;
+        break;
+      case '2weeks':
+        startDate = getWeekStartDate(referenceDate);
+        numDays = 14;
+        break;
+      case '3weeks':
+        startDate = getWeekStartDate(referenceDate);
+        numDays = 21;
+        break;
+      case 'year':
+      default:
+        // Return null to handle year view separately
+        return null;
+    }
+
+    for (let i = 0; i < numDays; i++) {
+      const d = new Date(startDate);
+      d.setDate(d.getDate() + i);
+      range.push(d);
+    }
+    return range;
   };
 
   const isToday = (date) => {
@@ -147,34 +192,68 @@ function Calendar() {
     daysOfYear.push(new Date(year, 0, i + 1));
   }
 
-  // Group days by week
-  const daysByWeek = [];
-  let currentWeek = [];
-  let currentWeekNum = null;
-
-  daysOfYear.forEach((date) => {
-    const weekNum = getWeekNumber(date);
-    if (currentWeekNum !== null && currentWeekNum !== weekNum) {
-      daysByWeek.push(currentWeek);
-      currentWeek = [];
-    }
-    currentWeek.push(date);
-    currentWeekNum = weekNum;
-  });
-  if (currentWeek.length > 0) {
-    daysByWeek.push(currentWeek);
-  }
-
   return (
     <div className="timeline-calendar-container">
       <div className="header">
-        <h1>Load Tracking Timeline - {year}</h1>
-        <div className="year-controls">
-          <button onClick={() => setYear(year - 1)}>← Prev Year</button>
+        <h1>Load Tracking</h1>
+        <div className="view-controls">
+          <button 
+            className={`view-btn ${viewType === 'day' ? 'active' : ''}`}
+            onClick={() => {
+              setViewType('day');
+              setReferenceDate(new Date());
+            }}
+          >
+            Day
+          </button>
+          <button 
+            className={`view-btn ${viewType === 'week' ? 'active' : ''}`}
+            onClick={() => {
+              setViewType('week');
+              setReferenceDate(new Date());
+            }}
+          >
+            Week
+          </button>
+          <button 
+            className={`view-btn ${viewType === '2weeks' ? 'active' : ''}`}
+            onClick={() => {
+              setViewType('2weeks');
+              setReferenceDate(new Date());
+            }}
+          >
+            2 Weeks
+          </button>
+          <button 
+            className={`view-btn ${viewType === '3weeks' ? 'active' : ''}`}
+            onClick={() => {
+              setViewType('3weeks');
+              setReferenceDate(new Date());
+            }}
+          >
+            3 Weeks
+          </button>
+          <button 
+            className={`view-btn ${viewType === 'year' ? 'active' : ''}`}
+            onClick={() => {
+              setViewType('year');
+              setYear(new Date().getFullYear());
+            }}
+          >
+            Year
+          </button>
+        </div>
+        <div className="header-actions">
           <button className="btn-create" onClick={() => setShowForm(!showForm)}>
             {showForm ? 'Cancel' : '+ New Load'}
           </button>
-          <button onClick={() => setYear(year + 1)}>Next Year →</button>
+          {viewType === 'year' && (
+            <div className="year-controls">
+              <button onClick={() => setYear(year - 1)}>← Prev Year</button>
+              <span className="year-display">{year}</span>
+              <button onClick={() => setYear(year + 1)}>Next Year →</button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -216,72 +295,176 @@ function Calendar() {
         </div>
       )}
 
-      <div className="timeline-wrapper">
-        <div className="timeline-label">ТОВАРИ</div>
-        <div className="timeline-scroll">
-          {daysByWeek.map((week, weekIdx) => (
-            <div key={weekIdx} className="timeline-week">
-              <div className="week-header">
-                <span className="week-number">CW{getWeekNumber(week[0])}</span>
-              </div>
-              <div className="week-days">
-                {week.map((date, dayIdx) => {
-                  const { in: inLoads, out: outLoads } = getLoadsByDateAndType(date);
-                  const today = isToday(date);
+      {viewType === 'year' ? (
+        // Year view rendering
+        (() => {
+          const daysOfYear = [];
+          for (let i = 0; i < getDaysInYear(year); i++) {
+            const d = new Date(year, 0, 1);
+            d.setDate(d.getDate() + i);
+            daysOfYear.push(d);
+          }
 
-                  return (
-                    <div
-                      key={dayIdx}
-                      className={`timeline-day ${today ? 'today' : ''}`}
-                      title={date.toLocaleDateString()}
-                    >
-                      <div className="day-number">{date.getDate()}</div>
-                      <div className="day-columns">
-                        <div className="day-column in-column">
-                          {inLoads.length > 0 && (
-                            <>
-                              <div className="column-dot" title={`${inLoads.length} incoming`}>●</div>
-                              {inLoads.slice(0, 1).map((load) => (
-                                <div
-                                  key={load._id}
-                                  className="load-dot"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedLoad(load);
-                                  }}
-                                  title={load.loadId.substring(0, 8)}
-                                >◆</div>
-                              ))}
-                            </>
-                          )}
-                        </div>
-                        <div className="day-column out-column">
-                          {outLoads.length > 0 && (
-                            <>
-                              <div className="column-dot" title={`${outLoads.length} outgoing`}>●</div>
-                              {outLoads.slice(0, 1).map((load) => (
-                                <div
-                                  key={load._id}
-                                  className="load-dot"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedLoad(load);
-                                  }}
-                                  title={load.loadId.substring(0, 8)}
-                                >◆</div>
-                              ))}
-                            </>
-                          )}
-                        </div>
-                      </div>
+          const daysByWeek = [];
+          let currentWeek = [];
+          let currentWeekNum = null;
+
+          daysOfYear.forEach((date) => {
+            const weekNum = getWeekNumber(date);
+            if (currentWeekNum !== null && currentWeekNum !== weekNum) {
+              daysByWeek.push(currentWeek);
+              currentWeek = [];
+            }
+            currentWeek.push(date);
+            currentWeekNum = weekNum;
+          });
+          if (currentWeek.length > 0) {
+            daysByWeek.push(currentWeek);
+          }
+
+          return (
+            <div className="timeline-wrapper year-view">
+              <div className="timeline-label">ТОВАРИ</div>
+              <div className="timeline-scroll">
+                {daysByWeek.map((week, weekIdx) => (
+                  <div key={weekIdx} className="timeline-week">
+                    <div className="week-header">
+                      <span className="week-number">CW{getWeekNumber(week[0])}</span>
                     </div>
-                  );
-                })}
+                    <div className="week-days">
+                      {week.map((date, dayIdx) => {
+                        const { in: inLoads, out: outLoads } = getLoadsByDateAndType(date);
+                        const today = isToday(date);
+
+                        return (
+                          <div
+                            key={dayIdx}
+                            className={`timeline-day ${today ? 'today' : ''}`}
+                            title={date.toLocaleDateString()}
+                          >
+                            <div className="day-number">{date.getDate()}</div>
+                            <div className="day-columns">
+                              <div className="day-column in-column">
+                                {inLoads.length > 0 && (
+                                  <>
+                                    <div className="column-dot" title={`${inLoads.length} incoming`}>●</div>
+                                    {inLoads.slice(0, 1).map((load) => (
+                                      <div
+                                        key={load._id}
+                                        className="load-dot"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedLoad(load);
+                                        }}
+                                        title={load.loadId.substring(0, 8)}
+                                      >◆</div>
+                                    ))}
+                                  </>
+                                )}
+                              </div>
+                              <div className="day-column out-column">
+                                {outLoads.length > 0 && (
+                                  <>
+                                    <div className="column-dot" title={`${outLoads.length} outgoing`}>●</div>
+                                    {outLoads.slice(0, 1).map((load) => (
+                                      <div
+                                        key={load._id}
+                                        className="load-dot"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedLoad(load);
+                                        }}
+                                        title={load.loadId.substring(0, 8)}
+                                      >◆</div>
+                                    ))}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
-        </div>
-      </div>
+          );
+        })()
+      ) : (
+        // Day/Week/2weeks/3weeks view rendering
+        (() => {
+          const dateRange = getDateRange();
+          
+          return (
+            <div className={`timeline-wrapper ${viewType}-view`}>
+              <div className="timeline-label">ТОВАРИ</div>
+              <div className="timeline-scroll detailed-view">
+                <div className="detailed-days">
+                  {dateRange.map((date, idx) => {
+                    const { in: inLoads, out: outLoads } = getLoadsByDateAndType(date);
+                    const today = isToday(date);
+                    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`detailed-day ${today ? 'today' : ''}`}
+                        title={date.toLocaleDateString()}
+                      >
+                        <div className="detailed-day-header">
+                          <div className="detailed-day-number">{date.getDate()}</div>
+                          <div className="detailed-day-name">{dayName}</div>
+                        </div>
+                        <div className="detailed-columns">
+                          <div className="detailed-column in-column">
+                            <div className="column-label">IN</div>
+                            <div className="detailed-load-list">
+                              {inLoads.map((load) => (
+                                <div
+                                  key={load._id}
+                                  className="detailed-load-card"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedLoad(load);
+                                  }}
+                                  title={load.loadId}
+                                >
+                                  <div className="load-mini-badge">{load.sender?.company?.substring(0, 3)}</div>
+                                </div>
+                              ))}
+                              {inLoads.length === 0 && <div className="empty-state">—</div>}
+                            </div>
+                          </div>
+                          <div className="detailed-column out-column">
+                            <div className="column-label">OUT</div>
+                            <div className="detailed-load-list">
+                              {outLoads.map((load) => (
+                                <div
+                                  key={load._id}
+                                  className="detailed-load-card"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedLoad(load);
+                                  }}
+                                  title={load.loadId}
+                                >
+                                  <div className="load-mini-badge">{load.receiver?.company?.substring(0, 3)}</div>
+                                </div>
+                              ))}
+                              {outLoads.length === 0 && <div className="empty-state">—</div>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()
+      )}
 
       {selectedLoad && (
         <div className="modal-overlay" onClick={() => setSelectedLoad(null)}>

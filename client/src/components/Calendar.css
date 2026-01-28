@@ -11,6 +11,8 @@
   margin-bottom: 30px;
   padding-bottom: 20px;
   border-bottom: 2px solid #ddd;
+  flex-wrap: wrap;
+  gap: 15px;
 }
 
 .header h1 {
@@ -19,19 +21,62 @@
   margin: 0;
 }
 
+.view-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.view-btn {
+  padding: 8px 16px;
+  background-color: #f0f0f0;
+  color: #333;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.3s;
+}
+
+.view-btn:hover {
+  background-color: #e0e0e0;
+  border-color: #999;
+}
+
+.view-btn.active {
+  background-color: #4CAF50;
+  color: white;
+  border-color: #4CAF50;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .year-controls {
   display: flex;
   gap: 10px;
+  align-items: center;
+}
+
+.year-display {
+  font-weight: 700;
+  font-size: 1.1rem;
+  min-width: 50px;
+  text-align: center;
 }
 
 .year-controls button {
-  padding: 10px 15px;
+  padding: 8px 12px;
   background-color: #2196F3;
   color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   font-weight: 600;
+  font-size: 0.85rem;
   transition: background-color 0.3s;
 }
 
@@ -118,6 +163,30 @@
   height: 200px;
 }
 
+.timeline-wrapper.year-view {
+  height: 200px;
+}
+
+.timeline-wrapper.day-view {
+  height: auto;
+  min-height: 400px;
+}
+
+.timeline-wrapper.week-view {
+  height: auto;
+  min-height: 450px;
+}
+
+.timeline-wrapper.2weeks-view {
+  height: auto;
+  min-height: 500px;
+}
+
+.timeline-wrapper.3weeks-view {
+  height: auto;
+  min-height: 550px;
+}
+
 .timeline-label {
   display: flex;
   align-items: center;
@@ -138,6 +207,135 @@
   flex: 1;
   padding: 10px 0;
   scroll-behavior: smooth;
+}
+
+.timeline-scroll.detailed-view {
+  overflow-y: auto;
+  gap: 0;
+}
+
+.detailed-days {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+}
+
+.detailed-day {
+  flex: 1;
+  min-width: 120px;
+  background-color: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.2s;
+}
+
+.detailed-day:hover {
+  background-color: #f0f0f0;
+  border-color: #999;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.detailed-day.today {
+  border: 2px solid #4CAF50;
+  background-color: #f0f8f0;
+  font-weight: 700;
+}
+
+.detailed-day-header {
+  text-align: center;
+  border-bottom: 2px solid #ddd;
+  padding-bottom: 8px;
+}
+
+.detailed-day-number {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.detailed-day-name {
+  font-size: 0.75rem;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+
+.detailed-columns {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+}
+
+.detailed-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 3px;
+  background-color: white;
+}
+
+.detailed-column.in-column {
+  border-left: 4px solid #4CAF50;
+}
+
+.detailed-column.out-column {
+  border-left: 4px solid #FF9800;
+}
+
+.column-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: center;
+}
+
+.detailed-load-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+  min-height: 40px;
+}
+
+.detailed-load-card {
+  background-color: #f5f5f5;
+  padding: 6px 4px;
+  border-radius: 3px;
+  border: 1px solid #ddd;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.detailed-load-card:hover {
+  background-color: #4CAF50;
+  color: white;
+  border-color: #4CAF50;
+  transform: scale(1.05);
+}
+
+.load-mini-badge {
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+.empty-state {
+  text-align: center;
+  color: #ccc;
+  font-size: 1.2rem;
+  padding: 8px 0;
 }
 
 .timeline-scroll::-webkit-scrollbar {
@@ -420,6 +618,16 @@
     align-items: flex-start;
   }
 
+  .view-controls {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .header-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
   .year-controls {
     width: 100%;
     justify-content: space-between;
@@ -436,6 +644,10 @@
     min-width: auto;
     padding-bottom: 10px;
     padding-right: 10px;
+  }
+
+  .detailed-day {
+    min-width: 100px;
   }
 
   .modal {
