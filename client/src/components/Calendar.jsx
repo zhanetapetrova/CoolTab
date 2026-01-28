@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import DayView from './DayView';
 import './Calendar.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -11,6 +12,7 @@ function Calendar() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [viewType, setViewType] = useState('week'); // 'year', 'day', 'week', '2weeks', '3weeks'
   const [referenceDate, setReferenceDate] = useState(new Date());
+  const [dayViewDate, setDayViewDate] = useState(null);
 
   const STATUSES = [
     { key: 'order_received', label: 'Order Received' },
@@ -399,6 +401,7 @@ function Calendar() {
                             key={dayIdx}
                             className={`timeline-day ${today ? 'today' : ''}`}
                             title={date.toLocaleDateString()}
+                            onDoubleClick={() => setDayViewDate(date.toISOString())}
                           >
                             <div className="day-number">{date.getDate()}</div>
                             <div className="day-columns">
@@ -469,6 +472,7 @@ function Calendar() {
                         key={idx}
                         className={`detailed-day ${today ? 'today' : ''}`}
                         title={date.toLocaleDateString()}
+                        onDoubleClick={() => setDayViewDate(date.toISOString())}
                       >
                         <div className="detailed-day-header">
                           <div className="detailed-day-number">{date.getDate()}</div>
@@ -614,6 +618,21 @@ function Calendar() {
             </div>
           </div>
         </div>
+      )}
+
+      {dayViewDate && (
+        <DayView
+          date={dayViewDate}
+          loads={loads}
+          onClose={() => setDayViewDate(null)}
+          onLoadClick={(load) => {
+            setSelectedLoad(load);
+            setDayViewDate(null);
+          }}
+          onStatusChange={() => {
+            fetchLoads();
+          }}
+        />
       )}
     </div>
   );
