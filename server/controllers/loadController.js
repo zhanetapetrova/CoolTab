@@ -283,7 +283,7 @@ exports.updateLoadStatus = async (req, res) => {
 
     let load;
     if (req.useMockDb) {
-      load = await mockDb.updateLoadStatus(id, status, notes, location);
+      load = await mockDb.updateLoadStatus(id, status, notes, location, actualDate);
     } else {
       load = await Load.findByIdAndUpdate(
         id,

@@ -85,16 +85,33 @@ const mockDb = {
     });
   },
 
-  updateLoadStatus: async (id, status, notes, location) => {
+  updateLoadStatus: async (id, status, notes, location, actualDate) => {
     const load = loads.find((l) => l._id === id);
     if (!load) return null;
 
+    const timestamp = actualDate ? new Date(actualDate) : new Date();
     load.status = status;
     load.updatedAt = new Date();
+    
+    // Initialize actualDates if not exists
+    if (!load.actualDates) {
+      load.actualDates = {};
+    }
+    
+    // Record actual dates based on status change
+    if (status === 'in_warehouse') {
+      load.actualDates.warehouseArrival = timestamp;
+    } else if (status === 'loading' || status === 'in_transit_to_destination') {
+      load.actualDates.warehouseDispatch = timestamp;
+    } else if (status === 'arrived') {
+      load.actualDates.clientDelivery = timestamp;
+      load.actualDeliveryDate = timestamp;
+    }
+    
     if (!load.timeline) load.timeline = [];
     load.timeline.push({
       status,
-      timestamp: new Date(),
+      timestamp: timestamp,
       notes,
       location,
     });
@@ -167,6 +184,14 @@ const mockDb = {
         warehouse: { incomingDate: today, palletLocation: 'A-12' },
         transport: { dispatchDate: tomorrow },
         expectedDeliveryDate: nextDay,
+        plannedDates: {
+          warehouseArrival: today,
+          warehouseDispatch: tomorrow,
+          clientDelivery: nextDay,
+        },
+        actualDates: {
+          warehouseArrival: today,
+        },
         timeline: [
           { status: 'order_received', timestamp: new Date(today.getTime() - 86400000), notes: 'Order placed' },
           { status: 'in_warehouse', timestamp: today, notes: 'Received at warehouse' },
@@ -181,6 +206,14 @@ const mockDb = {
         warehouse: { incomingDate: today, palletLocation: 'B-5' },
         transport: { dispatchDate: tomorrow, truckId: 'TRK-001' },
         expectedDeliveryDate: nextDay,
+        plannedDates: {
+          warehouseArrival: today,
+          warehouseDispatch: tomorrow,
+          clientDelivery: nextDay,
+        },
+        actualDates: {
+          warehouseArrival: today,
+        },
         timeline: [
           { status: 'in_warehouse', timestamp: today, notes: 'In warehouse' },
           { status: 'loading', timestamp: today, notes: 'Being loaded' },
@@ -195,6 +228,15 @@ const mockDb = {
         warehouse: { incomingDate: new Date(today.getTime() - 86400000), palletLocation: 'C-8' },
         transport: { dispatchDate: today, truckId: 'TRK-002', driverId: 'DRV-001' },
         expectedDeliveryDate: tomorrow,
+        plannedDates: {
+          warehouseArrival: new Date(today.getTime() - 86400000),
+          warehouseDispatch: today,
+          clientDelivery: tomorrow,
+        },
+        actualDates: {
+          warehouseArrival: new Date(today.getTime() - 86400000),
+          warehouseDispatch: today,
+        },
         timeline: [
           { status: 'in_warehouse', timestamp: new Date(today.getTime() - 86400000) },
           { status: 'loading', timestamp: today },
