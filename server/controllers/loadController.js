@@ -267,6 +267,12 @@ exports.updateLoadStatus = async (req, res) => {
     const { id } = req.params;
     const { status, notes, location, actualDate } = req.body;
 
+    console.log('=== Status Update Request ===');
+    console.log('Load ID:', id);
+    console.log('New Status:', status);
+    console.log('Actual Date:', actualDate);
+    console.log('============================');
+
     // Use provided actualDate or current time
     const timestamp = actualDate ? new Date(actualDate) : new Date();
     const updateFields = { status };

@@ -325,6 +325,12 @@ function KanbanBoard() {
 
   const handleUpdateStatus = async (loadId, newStatus, actualDate = null) => {
     try {
+      console.log('=== Frontend Status Update ===');
+      console.log('Load ID:', loadId);
+      console.log('New Status:', newStatus);
+      console.log('Actual Date:', actualDate);
+      console.log('==============================');
+      
       await axios.patch(`${API_URL}/loads/${loadId}/status`, {
         status: newStatus,
         notes: `Moved to ${newStatus}`,
@@ -895,22 +901,33 @@ function KanbanBoard() {
                 {selectedLoad.status !== 'arrived' && (
                   <button
                     className="btn-next"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      console.log('BUTTON CLICKED - about to show dialog');
                       const currentIdx = STATUSES.findIndex(
                         (s) => s.key === selectedLoad.status
                       );
-                      if (currentIdx < STATUSES.length - 1) {
+                      console.log('Current status index:', currentIdx);
+                      if (currentIdx >= 0 && currentIdx < STATUSES.length - 1) {
+                        const nextStatus = STATUSES[currentIdx + 1].key;
+                        console.log('Next status will be:', nextStatus);
+                        // Force dialog to show
                         setStatusChangeDialog({
                           show: true,
                           loadId: selectedLoad._id,
-                          newStatus: STATUSES[currentIdx + 1].key
+                          newStatus: nextStatus
                         });
-                        // Set default to today
+                        // Clear and set date
                         const today = new Date();
                         const yyyy = today.getFullYear();
                         const mm = String(today.getMonth() + 1).padStart(2, '0');
                         const dd = String(today.getDate()).padStart(2, '0');
-                        setActualDate(`${yyyy}-${mm}-${dd}`);
+                        const dateStr = `${yyyy}-${mm}-${dd}`;
+                        setActualDate(dateStr);
+                        console.log('Dialog state set, date set to:', dateStr);
+                      } else {
+                        console.log('Cannot move - already at last phase or invalid index');
                       }
                     }}
                   >
