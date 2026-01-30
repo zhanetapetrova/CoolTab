@@ -767,11 +767,98 @@ function KanbanBoard() {
               )}
 
               <div className="detail-section">
-                <h3>Timeline</h3>
+                <h3>Planned vs Actual Timeline</h3>
+                <div className="timeline-comparison">
+                  <div className="timeline-item">
+                    <div className="milestone-name">Warehouse Arrival</div>
+                    <div className="date-comparison">
+                      <div className="planned-date">
+                        <span className="label">Planned:</span>
+                        <span className="value">
+                          {selectedLoad.plannedDates?.warehouseArrival 
+                            ? new Date(selectedLoad.plannedDates.warehouseArrival).toLocaleDateString()
+                            : 'Not set'}
+                        </span>
+                      </div>
+                      <div className={`actual-date ${
+                        selectedLoad.actualDates?.warehouseArrival
+                          ? new Date(selectedLoad.actualDates.warehouseArrival) > new Date(selectedLoad.plannedDates?.warehouseArrival || 0)
+                            ? 'delayed'
+                            : 'on-time'
+                          : 'pending'
+                      }`}>
+                        <span className="label">Actual:</span>
+                        <span className="value">
+                          {selectedLoad.actualDates?.warehouseArrival 
+                            ? new Date(selectedLoad.actualDates.warehouseArrival).toLocaleDateString()
+                            : 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="timeline-item">
+                    <div className="milestone-name">Warehouse Dispatch</div>
+                    <div className="date-comparison">
+                      <div className="planned-date">
+                        <span className="label">Planned:</span>
+                        <span className="value">
+                          {selectedLoad.plannedDates?.warehouseDispatch 
+                            ? new Date(selectedLoad.plannedDates.warehouseDispatch).toLocaleDateString()
+                            : 'Not set'}
+                        </span>
+                      </div>
+                      <div className={`actual-date ${
+                        selectedLoad.actualDates?.warehouseDispatch
+                          ? new Date(selectedLoad.actualDates.warehouseDispatch) > new Date(selectedLoad.plannedDates?.warehouseDispatch || 0)
+                            ? 'delayed'
+                            : 'on-time'
+                          : 'pending'
+                      }`}>
+                        <span className="label">Actual:</span>
+                        <span className="value">
+                          {selectedLoad.actualDates?.warehouseDispatch 
+                            ? new Date(selectedLoad.actualDates.warehouseDispatch).toLocaleDateString()
+                            : 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="timeline-item">
+                    <div className="milestone-name">Client Delivery</div>
+                    <div className="date-comparison">
+                      <div className="planned-date">
+                        <span className="label">Planned:</span>
+                        <span className="value">
+                          {selectedLoad.plannedDates?.clientDelivery 
+                            ? new Date(selectedLoad.plannedDates.clientDelivery).toLocaleDateString()
+                            : 'Not set'}
+                        </span>
+                      </div>
+                      <div className={`actual-date ${
+                        selectedLoad.actualDates?.clientDelivery
+                          ? new Date(selectedLoad.actualDates.clientDelivery) > new Date(selectedLoad.plannedDates?.clientDelivery || 0)
+                            ? 'delayed'
+                            : 'on-time'
+                          : 'pending'
+                      }`}>
+                        <span className="label">Actual:</span>
+                        <span className="value">
+                          {selectedLoad.actualDates?.clientDelivery 
+                            ? new Date(selectedLoad.actualDates.clientDelivery).toLocaleDateString()
+                            : 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <h3 style={{ marginTop: '20px' }}>Status History</h3>
                 <div className="timeline">
                   {selectedLoad.timeline?.map((event, idx) => (
                     <div key={idx} className="timeline-event">
-                      <strong>{event.status}</strong>
+                      <strong>{event.status.replace(/_/g, ' ')}</strong>
                       <p>{new Date(event.timestamp).toLocaleString()}</p>
                       {event.notes && <p>{event.notes}</p>}
                     </div>
