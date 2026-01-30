@@ -119,7 +119,6 @@ function Calendar() {
     switch (statusKey) {
       case 'order_received': {
         const orderDate = load.createdAt ? normalizeDate(load.createdAt) : null;
-        const plannedArrival = load.plannedDates?.warehouseArrival ? normalizeDate(load.plannedDates.warehouseArrival) : null;
         
         // Only show on the actual creation date, not on planned arrival
         return orderDate ? isDateOnDay(orderDate, selectedDay) : false;
