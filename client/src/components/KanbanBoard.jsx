@@ -279,6 +279,18 @@ function KanbanBoard() {
     e.preventDefault();
     const formData = new FormData(e.target);
 
+    const plannedDates = {
+      warehouseArrival: formData.get('plannedWarehouseArrival') || undefined,
+      warehouseDispatch: formData.get('plannedWarehouseDispatch') || undefined,
+      clientDelivery: formData.get('plannedClientDelivery') || undefined,
+    };
+
+    const actualDates = {
+      warehouseArrival: formData.get('actualWarehouseArrival') || undefined,
+      warehouseDispatch: formData.get('actualWarehouseDispatch') || undefined,
+      clientDelivery: formData.get('actualClientDelivery') || undefined,
+    };
+
     const newLoad = {
       sender: {
         company: formData.get('senderCompany'),
@@ -293,7 +305,7 @@ function KanbanBoard() {
       items: [
         {
           description: formData.get('itemDescription'),
-          quantity: parseInt(formData.get('quantity')),
+          quantity: parseInt(formData.get('quantity'), 10) || 0,
         },
       ],
       incomingDate: formData.get('incomingDate') || undefined,
@@ -304,6 +316,8 @@ function KanbanBoard() {
       transport: {
         dispatchDate: formData.get('transportDispatchDate') || undefined,
       },
+      plannedDates,
+      actualDates,
     };
 
     try {
@@ -493,6 +507,26 @@ function KanbanBoard() {
               <input type="date" name="transportDispatchDate" />
               <label>Expected Arrival at Client</label>
               <input type="date" name="expectedDeliveryDate" required />
+            </div>
+
+            <div className="form-section">
+              <h3>Planned Dates</h3>
+              <label>Planned Warehouse Arrival</label>
+              <input type="date" name="plannedWarehouseArrival" />
+              <label>Planned Warehouse Dispatch</label>
+              <input type="date" name="plannedWarehouseDispatch" />
+              <label>Planned Client Delivery</label>
+              <input type="date" name="plannedClientDelivery" />
+            </div>
+
+            <div className="form-section">
+              <h3>Actual Dates</h3>
+              <label>Actual Warehouse Arrival</label>
+              <input type="date" name="actualWarehouseArrival" />
+              <label>Actual Warehouse Dispatch</label>
+              <input type="date" name="actualWarehouseDispatch" />
+              <label>Actual Client Delivery</label>
+              <input type="date" name="actualClientDelivery" />
             </div>
 
             <button type="submit" className="btn-submit">Create Load</button>

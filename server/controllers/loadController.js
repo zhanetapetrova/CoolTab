@@ -149,13 +149,19 @@ exports.getLoad = async (req, res) => {
 // Create new load
 exports.createLoad = async (req, res) => {
   try {
-    const { sender, receiver, items, expectedDeliveryDate, fileInfo, warehouse, transport, incomingDate } = req.body;
+    const { sender, receiver, items, expectedDeliveryDate, warehouse, transport, incomingDate, plannedDates: plannedDatesInput, actualDates: actualDatesInput } = req.body;
     
-    // Create plannedDates object from input dates
+    // Create plannedDates object from input dates (allow override from request body)
     const plannedDates = {
-      warehouseArrival: warehouse?.incomingDate || incomingDate,
-      warehouseDispatch: transport?.dispatchDate,
-      clientDelivery: expectedDeliveryDate,
+      warehouseArrival: plannedDatesInput?.warehouseArrival || warehouse?.incomingDate || incomingDate,
+      warehouseDispatch: plannedDatesInput?.warehouseDispatch || transport?.dispatchDate,
+      clientDelivery: plannedDatesInput?.clientDelivery || expectedDeliveryDate,
+    };
+
+    const actualDates = {
+      warehouseArrival: actualDatesInput?.warehouseArrival || undefined,
+      warehouseDispatch: actualDatesInput?.warehouseDispatch || undefined,
+      clientDelivery: actualDatesInput?.clientDelivery || undefined,
     };
     
     let load;
@@ -169,6 +175,7 @@ exports.createLoad = async (req, res) => {
         transport,
         incomingDate,
         plannedDates,
+        actualDates,
         status: 'order_received',
       });
     } else {
@@ -181,6 +188,7 @@ exports.createLoad = async (req, res) => {
         transport,
         incomingDate,
         plannedDates,
+        actualDates,
         status: 'order_received',
       });
       await load.save();
