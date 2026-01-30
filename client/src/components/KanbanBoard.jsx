@@ -325,12 +325,6 @@ function KanbanBoard() {
 
   const handleUpdateStatus = async (loadId, newStatus, actualDate = null) => {
     try {
-      console.log('=== Frontend Status Update ===');
-      console.log('Load ID:', loadId);
-      console.log('New Status:', newStatus);
-      console.log('Actual Date:', actualDate);
-      console.log('==============================');
-      
       await axios.patch(`${API_URL}/loads/${loadId}/status`, {
         status: newStatus,
         notes: `Moved to ${newStatus}`,
@@ -876,22 +870,27 @@ function KanbanBoard() {
                 {selectedLoad.status !== 'order_received' && (
                   <button
                     className="btn-prev"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       const currentIdx = STATUSES.findIndex(
                         (s) => s.key === selectedLoad.status
                       );
                       if (currentIdx > 0) {
-                        setStatusChangeDialog({
-                          show: true,
-                          loadId: selectedLoad._id,
-                          newStatus: STATUSES[currentIdx - 1].key
-                        });
-                        // Set default to today
+                        // Get today's date as default
                         const today = new Date();
                         const yyyy = today.getFullYear();
                         const mm = String(today.getMonth() + 1).padStart(2, '0');
                         const dd = String(today.getDate()).padStart(2, '0');
-                        setActualDate(`${yyyy}-${mm}-${dd}`);
+                        const defaultDate = `${yyyy}-${mm}-${dd}`;
+                        
+                        // Use prompt to ask for date
+                        const userDate = prompt(`Enter actual date for previous phase (YYYY-MM-DD):\n\nDefault: ${defaultDate}`, defaultDate);
+                        
+                        if (userDate !== null && userDate !== '') {
+                          const prevStatus = STATUSES[currentIdx - 1].key;
+                          handleUpdateStatus(selectedLoad._id, prevStatus, userDate);
+                        }
                       }
                     }}
                   >
@@ -902,32 +901,26 @@ function KanbanBoard() {
                   <button
                     className="btn-next"
                     onClick={(e) => {
-                      e.stopPropagation();
                       e.preventDefault();
-                      console.log('BUTTON CLICKED - about to show dialog');
+                      e.stopPropagation();
                       const currentIdx = STATUSES.findIndex(
                         (s) => s.key === selectedLoad.status
                       );
-                      console.log('Current status index:', currentIdx);
-                      if (currentIdx >= 0 && currentIdx < STATUSES.length - 1) {
-                        const nextStatus = STATUSES[currentIdx + 1].key;
-                        console.log('Next status will be:', nextStatus);
-                        // Force dialog to show
-                        setStatusChangeDialog({
-                          show: true,
-                          loadId: selectedLoad._id,
-                          newStatus: nextStatus
-                        });
-                        // Clear and set date
+                      if (currentIdx < STATUSES.length - 1) {
+                        // Get today's date as default
                         const today = new Date();
                         const yyyy = today.getFullYear();
                         const mm = String(today.getMonth() + 1).padStart(2, '0');
                         const dd = String(today.getDate()).padStart(2, '0');
-                        const dateStr = `${yyyy}-${mm}-${dd}`;
-                        setActualDate(dateStr);
-                        console.log('Dialog state set, date set to:', dateStr);
-                      } else {
-                        console.log('Cannot move - already at last phase or invalid index');
+                        const defaultDate = `${yyyy}-${mm}-${dd}`;
+                        
+                        // Use prompt to ask for date
+                        const userDate = prompt(`Enter actual date for this phase (YYYY-MM-DD):\n\nDefault: ${defaultDate}`, defaultDate);
+                        
+                        if (userDate !== null && userDate !== '') {
+                          const nextStatus = STATUSES[currentIdx + 1].key;
+                          handleUpdateStatus(selectedLoad._id, nextStatus, userDate);
+                        }
                       }
                     }}
                   >
