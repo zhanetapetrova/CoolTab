@@ -179,12 +179,20 @@ function KanbanBoard() {
       let showInIN = false;
       let showInOUT = false;
 
-      // Rule 1: Order Received - only on creation date or planned warehouse arrival
+      // Rule 1: Order Received - prioritize planned warehouse arrival, fallback to creation date
       if (load.status === 'order_received') {
-        const orderDate = load.createdAt ? new Date(load.createdAt) : null;
         const plannedArrival = load.plannedDates?.warehouseArrival;
-        if (isDateOnDay(orderDate, selectedDay) || isDateOnDay(plannedArrival, selectedDay)) {
-          showInIN = true;
+        const orderDate = load.createdAt ? new Date(load.createdAt) : null;
+        if (plannedArrival) {
+          // If planned arrival is set, use only that
+          if (isDateOnDay(plannedArrival, selectedDay)) {
+            showInIN = true;
+          }
+        } else if (orderDate) {
+          // Fallback to creation date only if no planned arrival
+          if (isDateOnDay(orderDate, selectedDay)) {
+            showInIN = true;
+          }
         }
       }
 
@@ -322,13 +330,16 @@ function KanbanBoard() {
 
     try {
       await axios.post(`${API_URL}/loads`, newLoad);
-      fetchLoads();
       setShowForm(false);
       
       // If warehouse incoming date is provided, switch to day view for that date
       const warehouseIncomingDate = formData.get('warehouseIncomingDate');
       if (warehouseIncomingDate) {
         setSelectedDate(warehouseIncomingDate);
+        // Fetch loads for the selected date
+        fetchLoads(warehouseIncomingDate);
+      } else {
+        fetchLoads();
       }
       
       e.target.reset();
