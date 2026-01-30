@@ -315,8 +315,9 @@
   border-top: 1px solid #e9ecef;
   display: flex;
   gap: 10px;
-  justify-content: space-between;
+  justify-content: flex-start;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .btn-next {

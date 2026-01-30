@@ -780,33 +780,6 @@ function KanbanBoard() {
               </div>
 
               <div className="modal-actions">
-                {selectedLoad.status !== 'arrived' && (
-                  <>
-                    <button
-                      className="btn-next"
-                      onClick={() => {
-                        const currentIdx = STATUSES.findIndex(
-                          (s) => s.key === selectedLoad.status
-                        );
-                        if (currentIdx < STATUSES.length - 1) {
-                          setStatusChangeDialog({
-                            show: true,
-                            loadId: selectedLoad._id,
-                            newStatus: STATUSES[currentIdx + 1].key
-                          });
-                          // Set default to today
-                          const today = new Date();
-                          const yyyy = today.getFullYear();
-                          const mm = String(today.getMonth() + 1).padStart(2, '0');
-                          const dd = String(today.getDate()).padStart(2, '0');
-                          setActualDate(`${yyyy}-${mm}-${dd}`);
-                        }
-                      }}
-                    >
-                      Move to Next Phase
-                    </button>
-                  </>
-                )}
                 {selectedLoad.status !== 'order_received' && (
                   <button
                     className="btn-prev"
@@ -829,7 +802,32 @@ function KanbanBoard() {
                       }
                     }}
                   >
-                    Undo / Move to Previous Phase
+                    ↶ Undo / Previous Phase
+                  </button>
+                )}
+                {selectedLoad.status !== 'arrived' && (
+                  <button
+                    className="btn-next"
+                    onClick={() => {
+                      const currentIdx = STATUSES.findIndex(
+                        (s) => s.key === selectedLoad.status
+                      );
+                      if (currentIdx < STATUSES.length - 1) {
+                        setStatusChangeDialog({
+                          show: true,
+                          loadId: selectedLoad._id,
+                          newStatus: STATUSES[currentIdx + 1].key
+                        });
+                        // Set default to today
+                        const today = new Date();
+                        const yyyy = today.getFullYear();
+                        const mm = String(today.getMonth() + 1).padStart(2, '0');
+                        const dd = String(today.getDate()).padStart(2, '0');
+                        setActualDate(`${yyyy}-${mm}-${dd}`);
+                      }
+                    }}
+                  >
+                    Move to Next Phase →
                   </button>
                 )}
               </div>
