@@ -151,17 +151,25 @@ exports.createLoad = async (req, res) => {
   try {
     const { sender, receiver, items, expectedDeliveryDate, warehouse, transport, incomingDate, plannedDates: plannedDatesInput, actualDates: actualDatesInput } = req.body;
     
+    // Helper: Convert string date to Date object if needed
+    const toDate = (value) => {
+      if (!value) return undefined;
+      if (value instanceof Date) return value;
+      if (typeof value === 'string') return new Date(value);
+      return undefined;
+    };
+    
     // Create plannedDates object from input dates (allow override from request body)
     const plannedDates = {
-      warehouseArrival: plannedDatesInput?.warehouseArrival || warehouse?.incomingDate || incomingDate,
-      warehouseDispatch: plannedDatesInput?.warehouseDispatch || transport?.dispatchDate,
-      clientDelivery: plannedDatesInput?.clientDelivery || expectedDeliveryDate,
+      warehouseArrival: toDate(plannedDatesInput?.warehouseArrival || warehouse?.incomingDate || incomingDate),
+      warehouseDispatch: toDate(plannedDatesInput?.warehouseDispatch || transport?.dispatchDate),
+      clientDelivery: toDate(plannedDatesInput?.clientDelivery || expectedDeliveryDate),
     };
 
     const actualDates = {
-      warehouseArrival: actualDatesInput?.warehouseArrival || undefined,
-      warehouseDispatch: actualDatesInput?.warehouseDispatch || undefined,
-      clientDelivery: actualDatesInput?.clientDelivery || undefined,
+      warehouseArrival: toDate(actualDatesInput?.warehouseArrival),
+      warehouseDispatch: toDate(actualDatesInput?.warehouseDispatch),
+      clientDelivery: toDate(actualDatesInput?.clientDelivery),
     };
     
     let load;
@@ -170,10 +178,16 @@ exports.createLoad = async (req, res) => {
         sender,
         receiver,
         items,
-        expectedDeliveryDate,
-        warehouse,
-        transport,
-        incomingDate,
+        expectedDeliveryDate: toDate(expectedDeliveryDate),
+        warehouse: {
+          ...warehouse,
+          incomingDate: toDate(warehouse?.incomingDate),
+        },
+        transport: {
+          ...transport,
+          dispatchDate: toDate(transport?.dispatchDate),
+        },
+        incomingDate: toDate(incomingDate),
         plannedDates,
         actualDates,
         status: 'order_received',
@@ -183,10 +197,16 @@ exports.createLoad = async (req, res) => {
         sender,
         receiver,
         items,
-        expectedDeliveryDate,
-        warehouse,
-        transport,
-        incomingDate,
+        expectedDeliveryDate: toDate(expectedDeliveryDate),
+        warehouse: {
+          ...warehouse,
+          incomingDate: toDate(warehouse?.incomingDate),
+        },
+        transport: {
+          ...transport,
+          dispatchDate: toDate(transport?.dispatchDate),
+        },
+        incomingDate: toDate(incomingDate),
         plannedDates,
         actualDates,
         status: 'order_received',
