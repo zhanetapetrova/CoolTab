@@ -24,14 +24,12 @@ const LoadSchema = new mongoose.Schema(
       required: true,
     },
     barcode: {
-      qrCodeData: String, // Base64 encoded QR code image
-      barcodeId: String, // Unique barcode identifier
+      qrCodeData: String,
+      barcodeId: String,
       generatedAt: { type: Date, default: Date.now },
     },
     items: [
       {
-        itemId: String,
-        qrCode: String,
         description: String,
         quantity: Number,
       },
@@ -46,40 +44,34 @@ const LoadSchema = new mongoose.Schema(
       address: String,
       contact: String,
     },
+    // Status-specific dates entered by user
+    statusDates: {
+      orderReceived: Date,
+      inTransitToWarehouse: Date,
+      unloading: Date,
+      inWarehouse: Date,
+      transportIssued: Date,
+      loading: Date,
+      inTransitToDestination: Date,
+      arrived: Date,
+    },
     warehouse: {
-      palletLocation: String, // Address within warehouse
-      incomingDate: Date,
-      warehouseNotes: String,
+      palletLocation: String,
+      notes: String,
     },
     transport: {
       truckId: String,
       driverId: String,
       carrier: String,
-      dispatchDate: Date,
-    },
-    // Planned dates (set when load is created)
-    plannedDates: {
-      warehouseArrival: Date,
-      warehouseDispatch: Date,
-      clientDelivery: Date,
-    },
-    // Actual dates (set when status changes)
-    actualDates: {
-      warehouseArrival: Date,
-      warehouseDispatch: Date,
-      clientDelivery: Date,
     },
     timeline: [
       {
         status: String,
         timestamp: { type: Date, default: Date.now },
+        userEnteredDate: Date,
         notes: String,
-        location: String,
       },
     ],
-    incomingDate: { type: Date, default: Date.now },
-    expectedDeliveryDate: Date,
-    actualDeliveryDate: Date,
   },
   { timestamps: true }
 );

@@ -149,28 +149,7 @@ exports.getLoad = async (req, res) => {
 // Create new load
 exports.createLoad = async (req, res) => {
   try {
-    const { sender, receiver, items, expectedDeliveryDate, warehouse, transport, incomingDate, plannedDates: plannedDatesInput, actualDates: actualDatesInput } = req.body;
-    
-    // Helper: Convert string date to Date object if needed
-    const toDate = (value) => {
-      if (!value) return undefined;
-      if (value instanceof Date) return value;
-      if (typeof value === 'string') return new Date(value);
-      return undefined;
-    };
-    
-    // Create plannedDates object from input dates (allow override from request body)
-    const plannedDates = {
-      warehouseArrival: toDate(plannedDatesInput?.warehouseArrival || warehouse?.incomingDate || incomingDate),
-      warehouseDispatch: toDate(plannedDatesInput?.warehouseDispatch || transport?.dispatchDate),
-      clientDelivery: toDate(plannedDatesInput?.clientDelivery || expectedDeliveryDate),
-    };
-
-    const actualDates = {
-      warehouseArrival: toDate(actualDatesInput?.warehouseArrival),
-      warehouseDispatch: toDate(actualDatesInput?.warehouseDispatch),
-      clientDelivery: toDate(actualDatesInput?.clientDelivery),
-    };
+    const { sender, receiver, items, orderReceivedDate, deliveryDate } = req.body;
     
     let load;
     if (req.useMockDb) {
@@ -178,38 +157,34 @@ exports.createLoad = async (req, res) => {
         sender,
         receiver,
         items,
-        expectedDeliveryDate: toDate(expectedDeliveryDate),
-        warehouse: {
-          ...warehouse,
-          incomingDate: toDate(warehouse?.incomingDate),
+        statusDates: {
+          orderReceived: orderReceivedDate ? new Date(orderReceivedDate) : new Date(),
+          arrived: deliveryDate ? new Date(deliveryDate) : undefined,
         },
-        transport: {
-          ...transport,
-          dispatchDate: toDate(transport?.dispatchDate),
-        },
-        incomingDate: toDate(incomingDate),
-        plannedDates,
-        actualDates,
         status: 'order_received',
+        timeline: [{
+          status: 'order_received',
+          timestamp: new Date(),
+          userEnteredDate: orderReceivedDate ? new Date(orderReceivedDate) : new Date(),
+          notes: 'Order created',
+        }],
       });
     } else {
       load = new Load({
         sender,
         receiver,
         items,
-        expectedDeliveryDate: toDate(expectedDeliveryDate),
-        warehouse: {
-          ...warehouse,
-          incomingDate: toDate(warehouse?.incomingDate),
+        statusDates: {
+          orderReceived: orderReceivedDate ? new Date(orderReceivedDate) : new Date(),
+          arrived: deliveryDate ? new Date(deliveryDate) : undefined,
         },
-        transport: {
-          ...transport,
-          dispatchDate: toDate(transport?.dispatchDate),
-        },
-        incomingDate: toDate(incomingDate),
-        plannedDates,
-        actualDates,
         status: 'order_received',
+        timeline: [{
+          status: 'order_received',
+          timestamp: new Date(),
+          userEnteredDate: orderReceivedDate ? new Date(orderReceivedDate) : new Date(),
+          notes: 'Order created',
+        }],
       });
       await load.save();
     }
@@ -293,25 +268,33 @@ exports.createLoadFromFile = async (req, res) => {
 exports.updateLoadStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, notes, location, actualDate } = req.body;
+    const { status, notes, userEnteredDate } = req.body;
 
-    // Use provided actualDate or current time
-    const timestamp = actualDate ? new Date(actualDate) : new Date();
+    const timestamp = new Date();
+    const enteredDate = userEnteredDate ? new Date(userEnteredDate) : timestamp;
+    
     const updateFields = { status };
     
-    // Record actual dates based on status change
-    if (status === 'in_warehouse') {
-      updateFields['actualDates.warehouseArrival'] = timestamp;
-    } else if (status === 'loading' || status === 'in_transit_to_destination') {
-      updateFields['actualDates.warehouseDispatch'] = timestamp;
-    } else if (status === 'arrived') {
-      updateFields['actualDates.clientDelivery'] = timestamp;
-      updateFields.actualDeliveryDate = timestamp;
+    // Record user-entered dates for all statuses
+    const statusDateMap = {
+      'order_received': 'orderReceived',
+      'in_transit_to_warehouse': 'inTransitToWarehouse',
+      'unloading': 'unloading',
+      'in_warehouse': 'inWarehouse',
+      'transport_issued': 'transportIssued',
+      'loading': 'loading',
+      'in_transit_to_destination': 'inTransitToDestination',
+      'arrived': 'arrived',
+    };
+    
+    const statusDateField = statusDateMap[status];
+    if (statusDateField) {
+      updateFields[`statusDates.${statusDateField}`] = enteredDate;
     }
 
     let load;
     if (req.useMockDb) {
-      load = await mockDb.updateLoadStatus(id, status, notes, location, actualDate);
+      load = await mockDb.updateLoadStatus(id, status, notes, userEnteredDate);
     } else {
       load = await Load.findByIdAndUpdate(
         id,
@@ -320,9 +303,9 @@ exports.updateLoadStatus = async (req, res) => {
           $push: {
             timeline: {
               status,
-              timestamp: timestamp,
-              notes,
-              location,
+              timestamp,
+              userEnteredDate: enteredDate,
+              notes: notes || `Status changed to ${status}`,
             },
           },
         },

@@ -85,35 +85,44 @@ const mockDb = {
     });
   },
 
-  updateLoadStatus: async (id, status, notes, location, actualDate) => {
+  updateLoadStatus: async (id, status, notes, userEnteredDate) => {
     const load = loads.find((l) => l._id === id);
     if (!load) return null;
 
-    const timestamp = actualDate ? new Date(actualDate) : new Date();
+    const timestamp = new Date();
+    const enteredDate = userEnteredDate ? new Date(userEnteredDate) : timestamp;
+    
     load.status = status;
     load.updatedAt = new Date();
     
-    // Initialize actualDates if not exists
-    if (!load.actualDates) {
-      load.actualDates = {};
+    // Initialize statusDates if not exists
+    if (!load.statusDates) {
+      load.statusDates = {};
     }
     
-    // Record actual dates based on status change
-    if (status === 'in_warehouse') {
-      load.actualDates.warehouseArrival = timestamp;
-    } else if (status === 'loading' || status === 'in_transit_to_destination') {
-      load.actualDates.warehouseDispatch = timestamp;
-    } else if (status === 'arrived') {
-      load.actualDates.clientDelivery = timestamp;
-      load.actualDeliveryDate = timestamp;
+    // Record user-entered dates for all statuses
+    const statusDateMap = {
+      'order_received': 'orderReceived',
+      'in_transit_to_warehouse': 'inTransitToWarehouse',
+      'unloading': 'unloading',
+      'in_warehouse': 'inWarehouse',
+      'transport_issued': 'transportIssued',
+      'loading': 'loading',
+      'in_transit_to_destination': 'inTransitToDestination',
+      'arrived': 'arrived',
+    };
+    
+    const statusDateField = statusDateMap[status];
+    if (statusDateField) {
+      load.statusDates[statusDateField] = enteredDate;
     }
     
     if (!load.timeline) load.timeline = [];
     load.timeline.push({
       status,
-      timestamp: timestamp,
-      notes,
-      location,
+      timestamp,
+      userEnteredDate: enteredDate,
+      notes: notes || `Status changed to ${status}`,
     });
 
     return load;

@@ -3,301 +3,133 @@ import axios from 'axios';
 import './KanbanBoard.css';
 
 const STATUSES = [
-  { key: 'order_received', label: 'Order Received' },
-  { key: 'in_transit_to_warehouse', label: 'In Transit to Warehouse' },
-  { key: 'unloading', label: 'Unloading' },
-  { key: 'in_warehouse', label: 'In Warehouse' },
-  { key: 'transport_issued', label: 'Transport Issued' },
-  { key: 'loading', label: 'Loading' },
-  { key: 'in_transit_to_destination', label: 'In Transit to Destination' },
-  { key: 'arrived', label: 'Arrived' },
+  { key: 'order_received', label: 'Order Received', requiresDate: true },
+  { key: 'in_transit_to_warehouse', label: 'In Transit to Warehouse', requiresDate: true },
+  { key: 'unloading', label: 'Unloading', requiresDate: true },
+  { key: 'in_warehouse', label: 'In Warehouse', requiresDate: true },
+  { key: 'transport_issued', label: 'TO DO Transport order', requiresDate: true },
+  { key: 'loading', label: 'Loading', requiresDate: true },
+  { key: 'in_transit_to_destination', label: 'In Transit to Final Destination', requiresDate: true },
+  { key: 'arrived', label: 'Arrived', requiresDate: true },
 ];
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
-// Supported file types for drag-and-drop
-const SUPPORTED_FILE_TYPES = ['email', 'pdf', 'gif', 'png', 'jpg', 'jpeg', 'txt', 'eml', 'msg', 'doc', 'docx', 'xlsx', 'xls'];
+const getTodayISO = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const addDays = (dateStr, days) => {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
 
 function KanbanBoard() {
   const [loads, setLoads] = useState([]);
-  const [selectedDate, setSelectedDate] = useState('');
   const [selectedLoad, setSelectedLoad] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [statusChangeDialog, setStatusChangeDialog] = useState({ show: false, loadId: null, newStatus: null });
-  const [actualDate, setActualDate] = useState('');
+  const [userDate, setUserDate] = useState('');
+  const [draggedLoad, setDraggedLoad] = useState(null);
+  const [filterDate, setFilterDate] = useState(getTodayISO());
+  const [notification, setNotification] = useState({ show: false, message: '' });
 
   useEffect(() => {
-    fetchLoads(selectedDate);
-  }, [selectedDate]);
+    fetchLoads();
+  }, []);
 
-  const fetchLoads = async (date) => {
+  const fetchLoads = async () => {
     try {
-      let url = `${API_URL}/loads`;
-      if (date) {
-        url = `${API_URL}/loads/date/${date}`;
-      }
-      const response = await axios.get(url);
+      const response = await axios.get(`${API_URL}/loads`);
       setLoads(response.data);
     } catch (error) {
       console.error('Error fetching loads:', error);
     }
   };
 
-  const getTodayISO = () => {
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  };
-
-  // Check if a load is overdue (not arrived by expected delivery date)
-  const isLoadOverdue = (load) => {
-    if (load.status === 'arrived') return false;
-    if (!load.expectedDeliveryDate) return false;
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expectedDate = new Date(load.expectedDeliveryDate);
-    expectedDate.setHours(0, 0, 0, 0);
-    
-    return today > expectedDate;
-  };
-
-  // Count overdue loads
-  const getOverdueCount = () => {
-    return loads.filter(load => isLoadOverdue(load)).length;
-  };
-
-  // Check if any milestone is delayed (actual date past planned date)
-  const hasDelayedMilestone = (load) => {
-    if (!load.plannedDates || !load.actualDates) return false;
-    
-    const checkDelay = (planned, actual) => {
-      if (!planned || !actual) return false;
-      return new Date(actual) > new Date(planned);
-    };
-    
-    return checkDelay(load.plannedDates.warehouseArrival, load.actualDates.warehouseArrival) ||
-           checkDelay(load.plannedDates.warehouseDispatch, load.actualDates.warehouseDispatch) ||
-           checkDelay(load.plannedDates.clientDelivery, load.actualDates.clientDelivery);
-  };
-
-  // Check if a specific milestone is approaching but not completed
-  const isApproachingDeadline = (load, milestone) => {
-    if (!load.plannedDates) return false;
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    let plannedDate;
-    let isCompleted = false;
-    
-    switch(milestone) {
-      case 'warehouseArrival':
-        plannedDate = load.plannedDates.warehouseArrival;
-        isCompleted = load.actualDates?.warehouseArrival || load.status === 'in_warehouse' || 
-                      ['transport_issued', 'loading', 'in_transit_to_destination', 'arrived'].includes(load.status);
-        break;
-      case 'warehouseDispatch':
-        plannedDate = load.plannedDates.warehouseDispatch;
-        isCompleted = load.actualDates?.warehouseDispatch || 
-                      ['loading', 'in_transit_to_destination', 'arrived'].includes(load.status);
-        break;
-      case 'clientDelivery':
-        plannedDate = load.plannedDates.clientDelivery;
-        isCompleted = load.actualDates?.clientDelivery || load.status === 'arrived';
-        break;
-      default:
-        return false;
-    }
-    
-    if (!plannedDate || isCompleted) return false;
-    
-    const planned = new Date(plannedDate);
-    planned.setHours(0, 0, 0, 0);
-    
-    // Approaching if past the planned date
-    return today > planned;
-  };
-
   const getLoadsByStatus = (status) => {
-    return loads.filter((load) => load.status === status);
-  };
-
-  // Helper: Get date from timeline for a specific status
-  const getStatusDate = (load, status) => {
-    const event = load.timeline?.find((e) => e.status === status);
-    return event ? new Date(event.timestamp) : null;
-  };
-
-  // Helper: Normalize date to midnight
-  const normalizeDate = (date) => {
-    if (!date) return null;
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  };
-
-  // Helper: Check if date is on selected day
-  const isDateOnDay = (date, selectedDay) => {
-    if (!date) return false;
-    const d = normalizeDate(date);
-    if (!d) return false;
-    return d.getTime() === selectedDay.getTime();
-  };
-
-  // Helper: Check if selected day is between two dates (inclusive)
-  const isDateBetween = (selectedDay, startDate, endDate) => {
-    if (!startDate) return false;
-    const start = normalizeDate(startDate);
-    if (!start) return false;
+    const filtered = loads.filter((load) => load.status === status);
     
-    if (!endDate) {
-      // If no end date, check if selected day is on or after start
-      return selectedDay.getTime() >= start.getTime();
-    }
+    const chosenDate = new Date(filterDate);
+    chosenDate.setHours(0, 0, 0, 0);
     
-    const end = normalizeDate(endDate);
-    if (!end) return selectedDay.getTime() >= start.getTime();
-    
-    return selectedDay.getTime() >= start.getTime() && selectedDay.getTime() <= end.getTime();
-  };
-
-  // For day view: IN = arriving in warehouse on selectedDate; OUT = dispatch/loaded on selectedDate
-  const getDayInOut = (date) => {
-    if (!date) return { in: [], out: [] };
-    const selectedDay = new Date(date);
-    selectedDay.setHours(0, 0, 0, 0);
-
-    const inList = [];
-    const outList = [];
-
-    loads.forEach((load) => {
-      let showInIN = false;
-      let showInOUT = false;
-
-      // Rule 1: Order Received - prioritize planned warehouse arrival, fallback to creation date
-      if (load.status === 'order_received') {
-        const plannedArrival = load.plannedDates?.warehouseArrival;
-        const orderDate = load.createdAt ? new Date(load.createdAt) : null;
-        if (plannedArrival) {
-          // If planned arrival is set, use only that
-          if (isDateOnDay(plannedArrival, selectedDay)) {
-            showInIN = true;
-          }
-        } else if (orderDate) {
-          // Fallback to creation date only if no planned arrival
-          if (isDateOnDay(orderDate, selectedDay)) {
-            showInIN = true;
-          }
-        }
+    return filtered.filter((load) => {
+      const dates = load.statusDates || {};
+      
+      switch (status) {
+        case 'order_received':
+          // Order Received <= chosen date
+          if (!dates.orderReceived) return false;
+          const orderDate = new Date(dates.orderReceived);
+          orderDate.setHours(0, 0, 0, 0);
+          return orderDate <= chosenDate;
+          
+        case 'in_transit_to_warehouse':
+          // In Transit < chosen date
+          if (!dates.inTransitToWarehouse) return false;
+          const transitDate = new Date(dates.inTransitToWarehouse);
+          transitDate.setHours(0, 0, 0, 0);
+          return transitDate < chosenDate;
+          
+        case 'unloading':
+          // Unloading on chosen date
+          if (!dates.unloading) return false;
+          const unloadDate = new Date(dates.unloading);
+          unloadDate.setHours(0, 0, 0, 0);
+          return unloadDate.getTime() === chosenDate.getTime();
+          
+        case 'in_warehouse':
+          // In Warehouse <= chosen date
+          if (!dates.inWarehouse) return false;
+          const warehouseDate = new Date(dates.inWarehouse);
+          warehouseDate.setHours(0, 0, 0, 0);
+          return warehouseDate <= chosenDate;
+          
+        case 'transport_issued':
+          // TO DO Transport <= chosen date
+          if (!dates.transportIssued) return false;
+          const transportDate = new Date(dates.transportIssued);
+          transportDate.setHours(0, 0, 0, 0);
+          return transportDate <= chosenDate;
+          
+        case 'loading':
+          // Loading on chosen date
+          if (!dates.loading) return false;
+          const loadingDate = new Date(dates.loading);
+          loadingDate.setHours(0, 0, 0, 0);
+          return loadingDate.getTime() === chosenDate.getTime();
+          
+        case 'in_transit_to_destination':
+          // Show if loading < chosen date
+          if (!dates.loading) return false;
+          const loadDate = new Date(dates.loading);
+          loadDate.setHours(0, 0, 0, 0);
+          return loadDate < chosenDate;
+          
+        case 'arrived':
+          // Arrived on chosen date
+          if (!dates.arrived) return false;
+          const arrivedDate = new Date(dates.arrived);
+          arrivedDate.setHours(0, 0, 0, 0);
+          return arrivedDate.getTime() === chosenDate.getTime();
+          
+        default:
+          return true;
       }
-
-      // Rule 2: In Transit to Warehouse - from start until unloading
-      if (load.status === 'in_transit_to_warehouse') {
-        const transitStart = getStatusDate(load, 'in_transit_to_warehouse') || load.createdAt;
-        const unloadingDate = getStatusDate(load, 'unloading');
-        if (isDateBetween(selectedDay, transitStart, unloadingDate)) {
-          showInIN = true;
-        }
-      }
-
-      // Rule 3: Unloading - transitional (show on unloading date)
-      if (load.status === 'unloading') {
-        const unloadingDate = getStatusDate(load, 'unloading');
-        if (isDateOnDay(unloadingDate, selectedDay)) {
-          showInIN = true;
-        }
-      }
-
-      // Rule 4: In Warehouse - from unloading date until transport issued
-      if (load.status === 'in_warehouse') {
-        const warehouseStart = getStatusDate(load, 'in_warehouse') || 
-                              getStatusDate(load, 'unloading') ||
-                              load.actualDates?.warehouseArrival;
-        const transportIssuedDate = getStatusDate(load, 'transport_issued');
-        if (isDateBetween(selectedDay, warehouseStart, transportIssuedDate)) {
-          showInIN = true;
-        }
-      }
-
-      // Rule 5: Transport Issued - show from issue date until loading starts
-      if (load.status === 'transport_issued') {
-        const issuedDate = getStatusDate(load, 'transport_issued');
-        const loadingDate = getStatusDate(load, 'loading');
-        if (isDateBetween(selectedDay, issuedDate, loadingDate)) {
-          showInOUT = true;
-        }
-      }
-
-      // Rule 6: Loading - only on 1 day (loading date)
-      if (load.status === 'loading') {
-        const loadingDate = getStatusDate(load, 'loading') || 
-                           load.transport?.dispatchDate ||
-                           load.plannedDates?.warehouseDispatch;
-        if (isDateOnDay(loadingDate, selectedDay)) {
-          showInOUT = true;
-        }
-      }
-
-      // Rule 7: In Transit to Destination - from loading/dispatch until arrived
-      if (load.status === 'in_transit_to_destination') {
-        const transitStart = getStatusDate(load, 'in_transit_to_destination') ||
-                            getStatusDate(load, 'loading') ||
-                            load.actualDates?.warehouseDispatch;
-        const arrivedDate = getStatusDate(load, 'arrived') || load.actualDates?.clientDelivery;
-        
-        // Only show if we're in the transit period (before arrival)
-        if (arrivedDate) {
-          // If already arrived, only show up to and including the day before arrival
-          const arrivalDay = normalizeDate(arrivedDate);
-          if (arrivalDay && selectedDay.getTime() >= arrivalDay.getTime()) {
-            // Don't show on or after arrival day
-            return;
-          }
-        }
-        
-        if (isDateBetween(selectedDay, transitStart, arrivedDate)) {
-          showInOUT = true;
-        }
-      }
-
-      // Rule 8: Arrived - only on arrival date
-      if (load.status === 'arrived') {
-        const arrivedDate = getStatusDate(load, 'arrived') || 
-                           load.actualDates?.clientDelivery;
-        
-        // ONLY show on the exact arrival date
-        if (arrivedDate && isDateOnDay(arrivedDate, selectedDay)) {
-          showInOUT = true;
-        }
-      }
-
-      if (showInIN) inList.push(load);
-      if (showInOUT) outList.push(load);
     });
-
-    return { in: inList, out: outList };
   };
 
   const handleCreateLoad = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-
-    const plannedDates = {
-      warehouseArrival: formData.get('plannedWarehouseArrival') || undefined,
-      warehouseDispatch: formData.get('plannedWarehouseDispatch') || undefined,
-      clientDelivery: formData.get('plannedClientDelivery') || undefined,
-    };
-
-    const actualDates = {
-      warehouseArrival: formData.get('actualWarehouseArrival') || undefined,
-      warehouseDispatch: formData.get('actualWarehouseDispatch') || undefined,
-      clientDelivery: formData.get('actualClientDelivery') || undefined,
-    };
 
     const newLoad = {
       sender: {
@@ -316,228 +148,202 @@ function KanbanBoard() {
           quantity: parseInt(formData.get('quantity'), 10) || 0,
         },
       ],
-      incomingDate: formData.get('incomingDate') || undefined,
-      expectedDeliveryDate: formData.get('expectedDeliveryDate'),
-      warehouse: {
-        incomingDate: formData.get('warehouseIncomingDate') || undefined,
-      },
-      transport: {
-        dispatchDate: formData.get('transportDispatchDate') || undefined,
-      },
-      plannedDates,
-      actualDates,
+      orderReceivedDate: formData.get('orderReceivedDate'),
+      deliveryDate: formData.get('deliveryDate'),
     };
 
     try {
       await axios.post(`${API_URL}/loads`, newLoad);
+      fetchLoads();
       setShowForm(false);
-      
-      // If warehouse incoming date is provided, switch to day view for that date
-      const warehouseIncomingDate = formData.get('warehouseIncomingDate');
-      if (warehouseIncomingDate) {
-        setSelectedDate(warehouseIncomingDate);
-        // Fetch loads for the selected date
-        fetchLoads(warehouseIncomingDate);
-      } else {
-        fetchLoads();
-      }
-      
       e.target.reset();
     } catch (error) {
       console.error('Error creating load:', error);
+      alert('Error creating load. Please try again.');
     }
   };
 
-  const handleUpdateStatus = async (loadId, newStatus, actualDate = null) => {
+  const handleStatusClick = (loadId, currentStatus, direction = 'next') => {
+    const currentIndex = STATUSES.findIndex((s) => s.key === currentStatus);
+    
+    if (direction === 'next') {
+      if (currentIndex === STATUSES.length - 1) {
+        alert('Load has already reached final status');
+        return;
+      }
+      const nextStatus = STATUSES[currentIndex + 1];
+      setStatusChangeDialog({ show: true, loadId, newStatus: nextStatus.key });
+      setUserDate(new Date().toISOString().split('T')[0]);
+    } else {
+      if (currentIndex === 0) {
+        alert('Load is already at the first status');
+        return;
+      }
+      const prevStatus = STATUSES[currentIndex - 1];
+      setStatusChangeDialog({ show: true, loadId, newStatus: prevStatus.key });
+      setUserDate(new Date().toISOString().split('T')[0]);
+    }
+  };
+
+  const handleUpdateStatus = async (loadId, newStatus, userEnteredDate = null) => {
     try {
       await axios.patch(`${API_URL}/loads/${loadId}/status`, {
         status: newStatus,
         notes: `Moved to ${newStatus}`,
-        actualDate: actualDate || new Date().toISOString(),
+        userEnteredDate: userEnteredDate || new Date().toISOString(),
       });
       fetchLoads();
       setSelectedLoad(null);
       setStatusChangeDialog({ show: false, loadId: null, newStatus: null });
-      setActualDate('');
+      setUserDate('');
+      
+      // Show notification for transport_issued status
+      if (newStatus === 'transport_issued') {
+        setNotification({
+          show: true,
+          message: 'Изпрати заявка за транспорт на Coolsped Bulgaria'
+        });
+        // Auto-hide notification after 6 seconds
+        setTimeout(() => {
+          setNotification({ show: false, message: '' });
+        }, 6000);
+      }
     } catch (error) {
       console.error('Error updating load:', error);
+      alert('Error updating status. Please try again.');
     }
   };
 
-  const handleDrag = (e) => {
+  const handleDragStart = (e, load) => {
+    setDraggedLoad(load);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
     e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
+    e.dataTransfer.dropEffect = 'move';
   };
 
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = (error) => reject(error);
-    });
-  };
-
-  const getFileType = (filename) => {
-    const ext = filename.split('.').pop().toLowerCase();
-    return ext;
-  };
-
-  const handleDrop = async (e) => {
+  const handleDrop = (e, targetStatus) => {
     e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
+    if (!draggedLoad) return;
 
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      setUploading(true);
-      
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const fileType = getFileType(file.name);
+    const currentIndex = STATUSES.findIndex((s) => s.key === draggedLoad.status);
+    const targetIndex = STATUSES.findIndex((s) => s.key === targetStatus);
 
-        if (!SUPPORTED_FILE_TYPES.includes(fileType)) {
-          alert(`File type .${fileType} not supported. Supported: email, PDF, GIF, PNG, JPG, TXT`);
-          continue;
-        }
-
-        try {
-          const fileBase64 = await fileToBase64(file);
-          
-          const response = await axios.post(`${API_URL}/loads/upload/file`, {
-            fileName: file.name,
-            fileBuffer: fileBase64,
-            senderCompany: `File: ${file.name}`,
-            receiverCompany: 'Pending',
-          });
-
-          console.log('Load created from file:', response.data);
-        } catch (error) {
-          console.error('Error uploading file:', error);
-          alert(`Error creating order from ${file.name}`);
-        }
-      }
-
-      setUploading(false);
-      fetchLoads();
+    // Only allow moving to adjacent column (next phase)
+    if (targetIndex === currentIndex + 1) {
+      // Move to next phase
+      setStatusChangeDialog({ show: true, loadId: draggedLoad._id, newStatus: targetStatus });
+      setUserDate(new Date().toISOString().split('T')[0]);
+    } else if (targetIndex === currentIndex - 1) {
+      // Move to previous phase
+      setStatusChangeDialog({ show: true, loadId: draggedLoad._id, newStatus: targetStatus });
+      setUserDate(new Date().toISOString().split('T')[0]);
+    } else if (targetIndex === currentIndex) {
+      // Same column, do nothing
+    } else {
+      alert('You can only move loads to adjacent columns (next or previous phase)');
     }
+
+    setDraggedLoad(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedLoad(null);
   };
 
   return (
-    <div className="kanban-container">
-      <div className="header">
-        <h1>Load Tracking System</h1>
-        <div className="header-controls">
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            aria-label="Select date"
-          />
+    <div className="app-container">
+      <div className="app-header">
+        <h1>CoolTab - Load Tracking</h1>
+        <div className="header-actions">
+          <div className="filter-section">
+            {filterDate !== getTodayISO() && (
+              <button
+                className="btn-clear-filter"
+                onClick={() => setFilterDate(getTodayISO())}
+              >
+                Reset to Today
+              </button>
+            )}
+            <label>Filter by Date:</label>
+            <button
+              className="btn-date-nav btn-prev-day"
+              onClick={() => setFilterDate(addDays(filterDate, -1))}
+              title="Previous day"
+            >
+              ←
+            </button>
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+            />
+            <button
+              className="btn-date-nav btn-next-day"
+              onClick={() => setFilterDate(addDays(filterDate, 1))}
+              title="Next day"
+            >
+              →
+            </button>
+          </div>
           <button
             className="btn-create"
-            onClick={() => {
-              setShowForm(!showForm);
-            }}
+            onClick={() => setShowForm(!showForm)}
           >
-            {showForm ? 'Cancel' : '+ New Load'}
-          </button>
-          <button
-            className="btn-view-day"
-            onClick={() => setSelectedDate(getTodayISO())}
-          >
-            Today
-          </button>
-          <button
-            className="btn-clear-day"
-            onClick={() => setSelectedDate('')}
-          >
-            Clear
+            {showForm ? 'Cancel' : '+ Create New Load'}
           </button>
         </div>
       </div>
 
-      {/* Overdue Alert */}
-      {getOverdueCount() > 0 && (
-        <div className="alert-banner overdue-alert">
-          <strong>⚠️ Alert:</strong> {getOverdueCount()} load{getOverdueCount() > 1 ? 's' : ''} past expected delivery date and not yet arrived!
+      {notification.show && (
+        <div className="notification-box">
+          <div className="notification-content">
+            <span>{notification.message}</span>
+            <button 
+              className="notification-close"
+              onClick={() => setNotification({ show: false, message: '' })}
+            >
+              ×
+            </button>
+          </div>
         </div>
       )}
-
-      {/* Drag and Drop Zone */}
-      <div
-        className={`drag-drop-zone ${dragActive ? 'active' : ''} ${uploading ? 'uploading' : ''}`}
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
-      >
-        <div className="drag-drop-content">
-          <svg className="drag-drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-          </svg>
-          <h3>Drag & Drop Files Here</h3>
-          <p>Email • PDF • Word • Excel • Images (PNG, GIF, JPG) • Text</p>
-          {uploading && <p className="uploading-text">Creating orders...</p>}
-        </div>
-      </div>
 
       {showForm && (
         <div className="form-container">
           <form onSubmit={handleCreateLoad}>
+            <h3>Create New Load</h3>
+            
             <div className="form-section">
-              <h3>Sender Information</h3>
+              <h4>Sender Information</h4>
               <input type="text" name="senderCompany" placeholder="Company" required />
               <input type="text" name="senderAddress" placeholder="Address" required />
               <input type="text" name="senderContact" placeholder="Contact" required />
             </div>
 
             <div className="form-section">
-              <h3>Receiver Information</h3>
+              <h4>Receiver Information</h4>
               <input type="text" name="receiverCompany" placeholder="Company" required />
               <input type="text" name="receiverAddress" placeholder="Address" required />
               <input type="text" name="receiverContact" placeholder="Contact" required />
             </div>
 
             <div className="form-section">
-              <h3>Load Details</h3>
+              <h4>Load Details</h4>
               <input type="text" name="itemDescription" placeholder="Item Description" required />
               <input type="number" name="quantity" placeholder="Quantity" required />
             </div>
 
             <div className="form-section">
-              <h3>Dates</h3>
-              <label>Incoming Date (to warehouse)</label>
-              <input type="date" name="warehouseIncomingDate" />
-              <label>Date of Loading</label>
-              <input type="date" name="transportDispatchDate" />
-              <label>Expected Arrival at Client</label>
-              <input type="date" name="expectedDeliveryDate" required />
+              <h4>Order Received Date</h4>
+              <input type="date" name="orderReceivedDate" defaultValue={getTodayISO()} required />
             </div>
 
             <div className="form-section">
-              <h3>Planned Dates</h3>
-              <label>Planned Warehouse Arrival</label>
-              <input type="date" name="plannedWarehouseArrival" />
-              <label>Planned Warehouse Dispatch</label>
-              <input type="date" name="plannedWarehouseDispatch" />
-              <label>Planned Client Delivery</label>
-              <input type="date" name="plannedClientDelivery" />
-            </div>
-
-            <div className="form-section">
-              <h3>Actual Dates</h3>
-              <label>Actual Warehouse Arrival</label>
-              <input type="date" name="actualWarehouseArrival" />
-              <label>Actual Warehouse Dispatch</label>
-              <input type="date" name="actualWarehouseDispatch" />
-              <label>Actual Client Delivery</label>
-              <input type="date" name="actualClientDelivery" />
+              <h4>Expected Delivery Date (at final destination)</h4>
+              <input type="date" name="deliveryDate" />
             </div>
 
             <button type="submit" className="btn-submit">Create Load</button>
@@ -546,178 +352,72 @@ function KanbanBoard() {
       )}
 
       <div className="kanban-board">
-        {selectedDate ? (
-          // Day view: two columns IN / OUT
-          (() => {
-            const { in: inList, out: outList } = getDayInOut(selectedDate);
-            return (
-              <>
-                <div className="kanban-column day-column">
-                  <div className="column-header">
-                    <h3>IN</h3>
-                    <span className="count">{inList.length}</span>
-                  </div>
-                  <div className="column-content">
-                    {inList.map((load) => (
-                      <div key={load._id} className={`load-card ${isLoadOverdue(load) ? 'overdue' : ''} ${hasDelayedMilestone(load) ? 'milestone-delayed' : ''}`} onClick={() => setSelectedLoad(load)}>
-                        {isLoadOverdue(load) && <div className="overdue-badge">OVERDUE</div>}
-                        {hasDelayedMilestone(load) && !isLoadOverdue(load) && <div className="delay-badge">DELAYED</div>}
-                        <div className="load-card-header">
-                          <strong>ID: {load.loadId.substring(0, 8)}</strong>
-                          {load.barcode?.qrCodeData && (
-                            <div className="qr-code-mini">
-                              <img src={load.barcode.qrCodeData} alt="QR Code" title="QR Code" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="load-card-body">
-                          <p><strong>From:</strong> {load.sender?.company || 'N/A'}</p>
-                          <p><strong>To:</strong> {load.receiver?.company || 'N/A'}</p>
-                          {load.warehouse?.palletLocation && <p><strong>Location:</strong> {load.warehouse.palletLocation}</p>}
-                          {/* Show milestone warnings */}
-                          {isApproachingDeadline(load, 'warehouseArrival') && (
-                            <p className="milestone-warning"><small>⚠️ Warehouse arrival overdue</small></p>
-                          )}
-                          {isApproachingDeadline(load, 'clientDelivery') && (
-                            <p className="milestone-warning"><small>⚠️ Delivery overdue</small></p>
-                          )}
-                        </div>
-                        <div className="load-card-footer">
-                          <small>{(load.warehouse?.incomingDate || load.incomingDate || load.expectedDeliveryDate) ? new Date(load.warehouse?.incomingDate || load.incomingDate || load.expectedDeliveryDate).toLocaleString() : new Date(load.createdAt).toLocaleDateString()}</small>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="kanban-column day-column">
-                  <div className="column-header">
-                    <h3>OUT</h3>
-                    <span className="count">{outList.length}</span>
-                  </div>
-                  <div className="column-content">
-                    {outList.map((load) => (
-                      <div key={load._id} className={`load-card ${isLoadOverdue(load) ? 'overdue' : ''} ${hasDelayedMilestone(load) ? 'milestone-delayed' : ''}`} onClick={() => setSelectedLoad(load)}>
-                        {isLoadOverdue(load) && <div className="overdue-badge">OVERDUE</div>}
-                        {hasDelayedMilestone(load) && !isLoadOverdue(load) && <div className="delay-badge">DELAYED</div>}
-                        <div className="load-card-header">
-                          <strong>ID: {load.loadId.substring(0, 8)}</strong>
-                          {load.barcode?.qrCodeData && (
-                            <div className="qr-code-mini">
-                              <img src={load.barcode.qrCodeData} alt="QR Code" title="QR Code" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="load-card-body">
-                          <p><strong>From:</strong> {load.sender?.company || 'N/A'}</p>
-                          <p><strong>To:</strong> {load.receiver?.company || 'N/A'}</p>
-                          {load.transport?.truckId && <p><strong>Truck:</strong> {load.transport.truckId}</p>}
-                          {/* Show milestone warnings */}
-                          {isApproachingDeadline(load, 'warehouseDispatch') && (
-                            <p className="milestone-warning"><small>⚠️ Dispatch overdue</small></p>
-                          )}
-                          {isApproachingDeadline(load, 'clientDelivery') && (
-                            <p className="milestone-warning"><small>⚠️ Delivery overdue</small></p>
-                          )}
-                        </div>
-                        <div className="load-card-footer">
-                          <small>{(load.transport?.dispatchDate) ? new Date(load.transport.dispatchDate).toLocaleString() : new Date(load.createdAt).toLocaleDateString()}</small>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            );
-          })()
-        ) : (
-          // Full 8-column view
-          STATUSES.map((status) => (
-            <div key={status.key} className="kanban-column">
-              <div className="column-header">
-                <h3>{status.label}</h3>
-                <span className="count">{getLoadsByStatus(status.key).length}</span>
-              </div>
-              <div className="column-content">
-                {getLoadsByStatus(status.key).map((load) => (
-                  <div
-                    key={load._id}
-                    className={`load-card ${isLoadOverdue(load) ? 'overdue' : ''} ${hasDelayedMilestone(load) ? 'milestone-delayed' : ''}`}
-                    onClick={() => setSelectedLoad(load)}
-                  >
-                    {isLoadOverdue(load) && <div className="overdue-badge">OVERDUE</div>}
-                    {hasDelayedMilestone(load) && !isLoadOverdue(load) && <div className="delay-badge">DELAYED</div>}
-                    <div className="load-card-header">
-                      <strong>ID: {load.loadId.substring(0, 8)}</strong>
-                      {load.barcode?.qrCodeData && (
-                        <div className="qr-code-mini">
-                          <img src={load.barcode.qrCodeData} alt="QR Code" title="QR Code" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="load-card-body">
-                      <p>
-                        <strong>From:</strong> {load.sender?.company || 'N/A'}
-                      </p>
-                      <p>
-                        <strong>To:</strong> {load.receiver?.company || 'N/A'}
-                      </p>
-                      {load.warehouse?.palletLocation && (
-                        <p>
-                          <strong>Location:</strong> {load.warehouse.palletLocation}
-                        </p>
-                      )}
-                      {/* Show specific milestone warnings based on status */}
-                      {status.key === 'in_transit_to_warehouse' && isApproachingDeadline(load, 'warehouseArrival') && (
-                        <p className="milestone-warning"><small>⚠️ Warehouse arrival overdue</small></p>
-                      )}
-                      {['in_warehouse', 'transport_issued'].includes(status.key) && isApproachingDeadline(load, 'warehouseDispatch') && (
-                        <p className="milestone-warning"><small>⚠️ Dispatch overdue</small></p>
-                      )}
-                      {['loading', 'in_transit_to_destination'].includes(status.key) && isApproachingDeadline(load, 'clientDelivery') && (
-                        <p className="milestone-warning"><small>⚠️ Delivery overdue</small></p>
-                      )}
-                    </div>
-                    <div className="load-card-footer">
-                      <small>{new Date(load.createdAt).toLocaleDateString()}</small>
-                    </div>
-                  </div>
-                ))}
-              </div>
+        {STATUSES.map((status) => (
+          <div 
+            key={status.key} 
+            className="kanban-column"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, status.key)}
+          >
+            <div className="column-header">
+              <h3>{status.label}</h3>
+              <span className="count">{getLoadsByStatus(status.key).length}</span>
             </div>
-          ))
-        )}
+            <div className="column-content">
+              {getLoadsByStatus(status.key).map((load) => (
+                <div
+                  key={load._id}
+                  className={`load-card ${load.status === 'transport_issued' ? 'transport-order' : ''}`}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, load)}
+                  onDragEnd={handleDragEnd}
+                  onClick={() => setSelectedLoad(load)}
+                >
+                  <div className="card-line-1">
+                    <span className="card-id">ID: {load.loadId?.substring(0, 8)}</span>
+                    {load.barcode?.qrCodeData && (
+                      <div className="qr-code-mini">
+                        <img src={load.barcode.qrCodeData} alt="QR Code" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="card-line-2">
+                    {load.sender?.company || 'N/A'} - {load.receiver?.company || 'N/A'}
+                  </div>
+                  <div className="card-line-3">
+                    {load.timeline && load.timeline.length > 0 && load.timeline[load.timeline.length - 1].userEnteredDate && (
+                      new Date(load.timeline[load.timeline.length - 1].userEnteredDate).toLocaleDateString()
+                    )}
+                  </div>
+                  <div className="card-line-4">
+                    {load.statusDates?.arrived && `Delivery: ${new Date(load.statusDates.arrived).toLocaleDateString()}`}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
+      {/* Load Details Modal */}
       {selectedLoad && (
         <div className="modal-overlay" onClick={() => setSelectedLoad(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Load Details</h2>
               <button className="btn-close" onClick={() => setSelectedLoad(null)}>×</button>
             </div>
+
             <div className="modal-body">
               <div className="detail-section">
-                <h3>Basic Information</h3>
-                <p><strong>Load ID:</strong> {selectedLoad.loadId}</p>
-                <p><strong>Status:</strong> {selectedLoad.status}</p>
-                <p>
-                  <strong>Created:</strong>{' '}
-                  {new Date(selectedLoad.createdAt).toLocaleString()}
-                </p>
+                <h3>Load ID: {selectedLoad.loadId}</h3>
+                <p><strong>Status:</strong> {STATUSES.find(s => s.key === selectedLoad.status)?.label}</p>
               </div>
 
               {selectedLoad.barcode?.qrCodeData && (
-                <div className="detail-section barcode-section">
+                <div className="detail-section">
                   <h3>QR Code</h3>
-                  <div className="barcode-container">
-                    <img 
-                      src={selectedLoad.barcode.qrCodeData} 
-                      alt="QR Code"
-                      className="barcode-image"
-                    />
-                    <p className="barcode-id">{selectedLoad.barcode.barcodeId}</p>
-                  </div>
+                  <img src={selectedLoad.barcode.qrCodeData} alt="QR Code" className="qr-code-large" />
                 </div>
               )}
 
@@ -725,251 +425,74 @@ function KanbanBoard() {
                 <h3>Sender</h3>
                 <p><strong>Company:</strong> {selectedLoad.sender?.company}</p>
                 <p><strong>Address:</strong> {selectedLoad.sender?.address}</p>
+                <p><strong>Contact:</strong> {selectedLoad.sender?.contact}</p>
               </div>
 
               <div className="detail-section">
                 <h3>Receiver</h3>
                 <p><strong>Company:</strong> {selectedLoad.receiver?.company}</p>
                 <p><strong>Address:</strong> {selectedLoad.receiver?.address}</p>
+                <p><strong>Contact:</strong> {selectedLoad.receiver?.contact}</p>
               </div>
-
-              {selectedLoad.warehouse?.palletLocation && (
-                <div className="detail-section">
-                  <h3>Warehouse</h3>
-                  <p>
-                    <strong>Pallet Location:</strong>{' '}
-                    {selectedLoad.warehouse.palletLocation}
-                  </p>
-                </div>
-              )}
-
-              {/* Planned vs Actual Dates Comparison */}
-              {(selectedLoad.plannedDates || selectedLoad.actualDates) && (
-                <div className="detail-section">
-                  <h3>Planned vs Actual Dates</h3>
-                  <div className="dates-comparison">
-                    {/* Warehouse Arrival */}
-                    {selectedLoad.plannedDates?.warehouseArrival && (
-                      <div className="date-row">
-                        <strong>Warehouse Arrival:</strong>
-                        <div className="date-comparison">
-                          <span className="planned-date">
-                            Planned: {new Date(selectedLoad.plannedDates.warehouseArrival).toLocaleDateString()}
-                          </span>
-                          {selectedLoad.actualDates?.warehouseArrival ? (
-                            <span className={`actual-date ${new Date(selectedLoad.actualDates.warehouseArrival) > new Date(selectedLoad.plannedDates.warehouseArrival) ? 'delayed' : 'on-time'}`}>
-                              Actual: {new Date(selectedLoad.actualDates.warehouseArrival).toLocaleDateString()}
-                              {new Date(selectedLoad.actualDates.warehouseArrival) > new Date(selectedLoad.plannedDates.warehouseArrival) && ' ⚠️ DELAYED'}
-                            </span>
-                          ) : (
-                            <span className="actual-date pending">Actual: Pending</span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Warehouse Dispatch */}
-                    {selectedLoad.plannedDates?.warehouseDispatch && (
-                      <div className="date-row">
-                        <strong>Warehouse Dispatch:</strong>
-                        <div className="date-comparison">
-                          <span className="planned-date">
-                            Planned: {new Date(selectedLoad.plannedDates.warehouseDispatch).toLocaleDateString()}
-                          </span>
-                          {selectedLoad.actualDates?.warehouseDispatch ? (
-                            <span className={`actual-date ${new Date(selectedLoad.actualDates.warehouseDispatch) > new Date(selectedLoad.plannedDates.warehouseDispatch) ? 'delayed' : 'on-time'}`}>
-                              Actual: {new Date(selectedLoad.actualDates.warehouseDispatch).toLocaleDateString()}
-                              {new Date(selectedLoad.actualDates.warehouseDispatch) > new Date(selectedLoad.plannedDates.warehouseDispatch) && ' ⚠️ DELAYED'}
-                            </span>
-                          ) : (
-                            <span className="actual-date pending">Actual: Pending</span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Client Delivery */}
-                    {selectedLoad.plannedDates?.clientDelivery && (
-                      <div className="date-row">
-                        <strong>Client Delivery:</strong>
-                        <div className="date-comparison">
-                          <span className="planned-date">
-                            Planned: {new Date(selectedLoad.plannedDates.clientDelivery).toLocaleDateString()}
-                          </span>
-                          {selectedLoad.actualDates?.clientDelivery ? (
-                            <span className={`actual-date ${new Date(selectedLoad.actualDates.clientDelivery) > new Date(selectedLoad.plannedDates.clientDelivery) ? 'delayed' : 'on-time'}`}>
-                              Actual: {new Date(selectedLoad.actualDates.clientDelivery).toLocaleDateString()}
-                              {new Date(selectedLoad.actualDates.clientDelivery) > new Date(selectedLoad.plannedDates.clientDelivery) && ' ⚠️ DELAYED'}
-                            </span>
-                          ) : (
-                            <span className="actual-date pending">Actual: Pending</span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
 
               <div className="detail-section">
-                <h3>Planned vs Actual Timeline</h3>
-                <div className="timeline-comparison">
-                  <div className="timeline-item">
-                    <div className="milestone-name">Warehouse Arrival</div>
-                    <div className="date-comparison">
-                      <div className="planned-date">
-                        <span className="label">Planned:</span>
-                        <span className="value">
-                          {selectedLoad.plannedDates?.warehouseArrival 
-                            ? new Date(selectedLoad.plannedDates.warehouseArrival).toLocaleDateString()
-                            : 'Not set'}
-                        </span>
-                      </div>
-                      <div className={`actual-date ${
-                        selectedLoad.actualDates?.warehouseArrival
-                          ? new Date(selectedLoad.actualDates.warehouseArrival) > new Date(selectedLoad.plannedDates?.warehouseArrival || 0)
-                            ? 'delayed'
-                            : 'on-time'
-                          : 'pending'
-                      }`}>
-                        <span className="label">Actual:</span>
-                        <span className="value">
-                          {selectedLoad.actualDates?.warehouseArrival 
-                            ? new Date(selectedLoad.actualDates.warehouseArrival).toLocaleDateString()
-                            : 'Pending'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="timeline-item">
-                    <div className="milestone-name">Warehouse Dispatch</div>
-                    <div className="date-comparison">
-                      <div className="planned-date">
-                        <span className="label">Planned:</span>
-                        <span className="value">
-                          {selectedLoad.plannedDates?.warehouseDispatch 
-                            ? new Date(selectedLoad.plannedDates.warehouseDispatch).toLocaleDateString()
-                            : 'Not set'}
-                        </span>
-                      </div>
-                      <div className={`actual-date ${
-                        selectedLoad.actualDates?.warehouseDispatch
-                          ? new Date(selectedLoad.actualDates.warehouseDispatch) > new Date(selectedLoad.plannedDates?.warehouseDispatch || 0)
-                            ? 'delayed'
-                            : 'on-time'
-                          : 'pending'
-                      }`}>
-                        <span className="label">Actual:</span>
-                        <span className="value">
-                          {selectedLoad.actualDates?.warehouseDispatch 
-                            ? new Date(selectedLoad.actualDates.warehouseDispatch).toLocaleDateString()
-                            : 'Pending'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="timeline-item">
-                    <div className="milestone-name">Client Delivery</div>
-                    <div className="date-comparison">
-                      <div className="planned-date">
-                        <span className="label">Planned:</span>
-                        <span className="value">
-                          {selectedLoad.plannedDates?.clientDelivery 
-                            ? new Date(selectedLoad.plannedDates.clientDelivery).toLocaleDateString()
-                            : 'Not set'}
-                        </span>
-                      </div>
-                      <div className={`actual-date ${
-                        selectedLoad.actualDates?.clientDelivery
-                          ? new Date(selectedLoad.actualDates.clientDelivery) > new Date(selectedLoad.plannedDates?.clientDelivery || 0)
-                            ? 'delayed'
-                            : 'on-time'
-                          : 'pending'
-                      }`}>
-                        <span className="label">Actual:</span>
-                        <span className="value">
-                          {selectedLoad.actualDates?.clientDelivery 
-                            ? new Date(selectedLoad.actualDates.clientDelivery).toLocaleDateString()
-                            : 'Pending'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <h3 style={{ marginTop: '20px' }}>Status History</h3>
-                <div className="timeline">
-                  {selectedLoad.timeline?.map((event, idx) => (
-                    <div key={idx} className="timeline-event">
-                      <strong>{event.status.replace(/_/g, ' ')}</strong>
-                      <p>{new Date(event.timestamp).toLocaleString()}</p>
-                      {event.notes && <p>{event.notes}</p>}
-                    </div>
-                  ))}
-                </div>
+                <h3>Items</h3>
+                {selectedLoad.items?.map((item, idx) => (
+                  <p key={idx}>{item.description} - Qty: {item.quantity}</p>
+                ))}
               </div>
+
+              {selectedLoad.statusDates && (
+                <div className="detail-section">
+                  <h3>Important Dates</h3>
+                  {selectedLoad.statusDates.orderReceived && (
+                    <p><strong>Order Received:</strong> {new Date(selectedLoad.statusDates.orderReceived).toLocaleString()}</p>
+                  )}
+                  {selectedLoad.statusDates.unloading && (
+                    <p><strong>Unloading:</strong> {new Date(selectedLoad.statusDates.unloading).toLocaleString()}</p>
+                  )}
+                  {selectedLoad.statusDates.loading && (
+                    <p><strong>Loading:</strong> {new Date(selectedLoad.statusDates.loading).toLocaleString()}</p>
+                  )}
+                  {selectedLoad.statusDates.arrived && (
+                    <p><strong>Arrived:</strong> {new Date(selectedLoad.statusDates.arrived).toLocaleString()}</p>
+                  )}
+                </div>
+              )}
+
+              {selectedLoad.timeline && selectedLoad.timeline.length > 0 && (
+                <div className="detail-section">
+                  <h3>Timeline</h3>
+                  <div className="timeline">
+                    {selectedLoad.timeline.map((event, idx) => (
+                      <div key={idx} className="timeline-event">
+                        <strong>{STATUSES.find(s => s.key === event.status)?.label || event.status}</strong>
+                        <p>{new Date(event.timestamp).toLocaleString()}</p>
+                        {event.userEnteredDate && (
+                          <p><small>User Date: {new Date(event.userEnteredDate).toLocaleDateString()}</small></p>
+                        )}
+                        {event.notes && <p><em>{event.notes}</em></p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="modal-actions">
                 {selectedLoad.status !== 'order_received' && (
                   <button
-                    className="btn-prev"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const currentIdx = STATUSES.findIndex(
-                        (s) => s.key === selectedLoad.status
-                      );
-                      if (currentIdx > 0) {
-                        // Get today's date as default
-                        const today = new Date();
-                        const yyyy = today.getFullYear();
-                        const mm = String(today.getMonth() + 1).padStart(2, '0');
-                        const dd = String(today.getDate()).padStart(2, '0');
-                        const defaultDate = `${yyyy}-${mm}-${dd}`;
-                        
-                        // Use prompt to ask for date
-                        const userDate = prompt(`Enter actual date for previous phase (YYYY-MM-DD):\n\nDefault: ${defaultDate}`, defaultDate);
-                        
-                        if (userDate !== null && userDate !== '') {
-                          const prevStatus = STATUSES[currentIdx - 1].key;
-                          handleUpdateStatus(selectedLoad._id, prevStatus, userDate);
-                        }
-                      }
-                    }}
+                    className="btn-prev-status"
+                    onClick={() => handleStatusClick(selectedLoad._id, selectedLoad.status, 'prev')}
                   >
-                    ↶ Undo / Previous Phase
+                    ← Move to Previous Status
                   </button>
                 )}
                 {selectedLoad.status !== 'arrived' && (
                   <button
-                    className="btn-next"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const currentIdx = STATUSES.findIndex(
-                        (s) => s.key === selectedLoad.status
-                      );
-                      if (currentIdx < STATUSES.length - 1) {
-                        // Get today's date as default
-                        const today = new Date();
-                        const yyyy = today.getFullYear();
-                        const mm = String(today.getMonth() + 1).padStart(2, '0');
-                        const dd = String(today.getDate()).padStart(2, '0');
-                        const defaultDate = `${yyyy}-${mm}-${dd}`;
-                        
-                        // Use prompt to ask for date
-                        const userDate = prompt(`Enter actual date for this phase (YYYY-MM-DD):\n\nDefault: ${defaultDate}`, defaultDate);
-                        
-                        if (userDate !== null && userDate !== '') {
-                          const nextStatus = STATUSES[currentIdx + 1].key;
-                          handleUpdateStatus(selectedLoad._id, nextStatus, userDate);
-                        }
-                      }
-                    }}
+                    className="btn-next-status"
+                    onClick={() => handleStatusClick(selectedLoad._id, selectedLoad.status)}
                   >
-                    Move to Next Phase →
+                    Move to Next Status →
                   </button>
                 )}
               </div>
@@ -978,46 +501,40 @@ function KanbanBoard() {
         </div>
       )}
 
-      {/* Status Change Date Dialog */}
+      {/* Date Input Dialog */}
       {statusChangeDialog.show && (
-        <div className="modal-overlay" onClick={() => setStatusChangeDialog({ show: false, loadId: null, newStatus: null })}>
-          <div className="modal status-change-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Confirm Status Change</h2>
-              <button className="btn-close" onClick={() => setStatusChangeDialog({ show: false, loadId: null, newStatus: null })}>×</button>
-            </div>
-            <div className="modal-body">
-              <p>Enter the actual date for this status change:</p>
-              <div className="form-section">
-                <label><strong>Status:</strong> {statusChangeDialog.newStatus?.replace(/_/g, ' ').toUpperCase()}</label>
-                <label><strong>Actual Date:</strong></label>
-                <input
-                  type="date"
-                  value={actualDate}
-                  onChange={(e) => setActualDate(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="modal-actions">
-                <button
-                  className="btn-cancel"
-                  onClick={() => setStatusChangeDialog({ show: false, loadId: null, newStatus: null })}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="btn-confirm"
-                  onClick={() => {
-                    if (actualDate) {
-                      handleUpdateStatus(statusChangeDialog.loadId, statusChangeDialog.newStatus, actualDate);
-                    } else {
-                      alert('Please select a date');
-                    }
-                  }}
-                >
-                  Confirm
-                </button>
-              </div>
+        <div className="modal-overlay">
+          <div className="modal-content date-dialog">
+            <h3>Enter Date for {STATUSES.find(s => s.key === statusChangeDialog.newStatus)?.label}</h3>
+            <p>Please enter the date for this status change:</p>
+            <input
+              type="date"
+              value={userDate}
+              onChange={(e) => setUserDate(e.target.value)}
+              required
+            />
+            <div className="dialog-actions">
+              <button
+                className="btn-submit"
+                onClick={() => {
+                  if (userDate) {
+                    handleUpdateStatus(statusChangeDialog.loadId, statusChangeDialog.newStatus, userDate);
+                  } else {
+                    alert('Please enter a date');
+                  }
+                }}
+              >
+                Confirm
+              </button>
+              <button
+                className="btn-cancel"
+                onClick={() => {
+                  setStatusChangeDialog({ show: false, loadId: null, newStatus: null });
+                  setUserDate('');
+                }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
